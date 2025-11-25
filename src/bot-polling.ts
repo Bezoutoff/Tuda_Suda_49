@@ -110,10 +110,12 @@ async function spamOrdersUntilSuccess(
   while ((!yesOrderPlaced || !noOrderPlaced) && attempts < MAX_ORDER_ATTEMPTS) {
     attempts++;
 
-    // Try YES order if not placed
+    // Place YES and NO orders in PARALLEL
+    const promises: Promise<void>[] = [];
+
     if (!yesOrderPlaced) {
-      try {
-        const yesOrder = await tradingService.createLimitOrder({
+      promises.push(
+        tradingService.createLimitOrder({
           tokenId: yesTokenId,
           side: 'BUY',
           price: price,
@@ -121,21 +123,22 @@ async function spamOrdersUntilSuccess(
           outcome: 'YES',
           expirationTimestamp: expirationTimestamp,
           negRisk: false,
-        });
-        yesOrderPlaced = true;
-        log(`YES order placed: ${yesOrder.orderId} (attempt ${attempts})`);
-      } catch (error: any) {
-        // Silent retry - market may not be active yet
-        if (attempts % 50 === 0) {
-          log(`YES order attempt ${attempts}: ${error.message}`);
-        }
-      }
+        })
+        .then(yesOrder => {
+          yesOrderPlaced = true;
+          log(`YES order placed: ${yesOrder.orderId} (attempt ${attempts})`);
+        })
+        .catch(error => {
+          if (attempts % 50 === 0) {
+            log(`YES order attempt ${attempts}: ${error.message}`);
+          }
+        })
+      );
     }
 
-    // Try NO order if not placed
     if (!noOrderPlaced) {
-      try {
-        const noOrder = await tradingService.createLimitOrder({
+      promises.push(
+        tradingService.createLimitOrder({
           tokenId: noTokenId,
           side: 'BUY',
           price: price,
@@ -143,16 +146,20 @@ async function spamOrdersUntilSuccess(
           outcome: 'NO',
           expirationTimestamp: expirationTimestamp,
           negRisk: false,
-        });
-        noOrderPlaced = true;
-        log(`NO order placed: ${noOrder.orderId} (attempt ${attempts})`);
-      } catch (error: any) {
-        // Silent retry - market may not be active yet
-        if (attempts % 50 === 0) {
-          log(`NO order attempt ${attempts}: ${error.message}`);
-        }
-      }
+        })
+        .then(noOrder => {
+          noOrderPlaced = true;
+          log(`NO order placed: ${noOrder.orderId} (attempt ${attempts})`);
+        })
+        .catch(error => {
+          if (attempts % 50 === 0) {
+            log(`NO order attempt ${attempts}: ${error.message}`);
+          }
+        })
+      );
     }
+
+    await Promise.all(promises);
 
     if (!yesOrderPlaced || !noOrderPlaced) {
       await new Promise(resolve => setTimeout(resolve, ORDER_RETRY_INTERVAL_MS));
