@@ -152,4 +152,69 @@ export class TradingService {
     await this.client.cancelOrder({ orderID: orderId });
     console.log(`Order cancelled: ${orderId}`);
   }
+
+  /**
+   * Create a signed order WITHOUT posting (for pre-sign optimization)
+   */
+  async createSignedOrder(request: CreateOrderRequest): Promise<any> {
+    if (!this.isInitialized || !this.client) {
+      throw new Error('Trading service not initialized');
+    }
+
+    const orderParams: any = {
+      tokenID: request.tokenId,
+      price: request.price,
+      side: request.side === 'BUY' ? Side.BUY : Side.SELL,
+      size: request.size,
+    };
+
+    if (request.expirationTimestamp && request.expirationTimestamp > 0) {
+      orderParams.expiration = request.expirationTimestamp;
+    }
+
+    // Only sign, don't post
+    const signedOrder = await this.client.createOrder(orderParams);
+    return signedOrder;
+  }
+
+  /**
+   * Post a pre-signed order
+   */
+  async postSignedOrder(signedOrder: any, expirationTimestamp?: number): Promise<Order> {
+    if (!this.isInitialized || !this.client) {
+      throw new Error('Trading service not initialized');
+    }
+
+    const orderType = expirationTimestamp ? OrderType.GTD : OrderType.GTC;
+
+    const orderResponse = await this.client.postOrders([
+      {
+        order: signedOrder,
+        orderType: orderType,
+      },
+    ]);
+
+    const firstResponse = Array.isArray(orderResponse) ? orderResponse[0] : orderResponse;
+
+    if (firstResponse?.success === false || firstResponse?.errorMsg) {
+      throw new Error(firstResponse?.errorMsg || 'Order posting failed');
+    }
+
+    if (!firstResponse?.orderID) {
+      throw new Error('No orderID returned');
+    }
+
+    return {
+      orderId: firstResponse.orderID,
+      tokenId: '',
+      side: 'BUY',
+      price: 0,
+      size: 0,
+      filledSize: 0,
+      outcome: 'YES',
+      status: 'OPEN',
+      timestamp: new Date(),
+      orderType: orderType === OrderType.GTD ? 'GTD' : 'GTC',
+    };
+  }
 }

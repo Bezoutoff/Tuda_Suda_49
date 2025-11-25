@@ -102,6 +102,26 @@ async function spamOrdersUntilSuccess(
   const ORDER_RETRY_INTERVAL_MS = BOT_CONFIG.ORDER_RETRY_INTERVAL_MS;
   const MAX_ORDER_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
 
+  // PRE-SIGN: создаём и подписываем ордер ОДИН раз
+  log(`Pre-signing order...`);
+  let signedOrder: any;
+  try {
+    signedOrder = await tradingService.createSignedOrder({
+      tokenId: yesTokenId,
+      side: 'BUY',
+      price: price,
+      size: size,
+      outcome: 'YES',
+      expirationTimestamp: expirationTimestamp,
+      negRisk: false,
+    });
+    log(`Order pre-signed successfully`);
+  } catch (error: any) {
+    logError(`Failed to pre-sign order: ${error.message}`);
+    return false;
+  }
+
+  // SPAM: отправляем подписанный ордер пока не пройдёт
   let yesOrderPlaced = false;
   let attempts = 0;
   const startTime = Date.now();
@@ -110,17 +130,9 @@ async function spamOrdersUntilSuccess(
     attempts++;
 
     try {
-      const yesOrder = await tradingService.createLimitOrder({
-        tokenId: yesTokenId,
-        side: 'BUY',
-        price: price,
-        size: size,
-        outcome: 'YES',
-        expirationTimestamp: expirationTimestamp,
-        negRisk: false,
-      });
+      const result = await tradingService.postSignedOrder(signedOrder, expirationTimestamp);
       yesOrderPlaced = true;
-      log(`YES order placed: ${yesOrder.orderId} (attempt ${attempts})`);
+      log(`YES order placed: ${result.orderId} (attempt ${attempts})`);
     } catch (error: any) {
       if (attempts % 100 === 0) {
         log(`YES order attempt ${attempts}: ${error.message}`);
