@@ -1,0 +1,51 @@
+/**
+ * Trading types for Polymarket orders
+ */
+
+import { OrderType } from '@polymarket/clob-client';
+
+export { OrderType };
+
+export type OrderSide = 'BUY' | 'SELL';
+
+export interface TradingConfig {
+  privateKey: string;
+  apiKey?: string;
+  secret?: string;
+  passphrase?: string;
+  funder?: string;
+  chainId: number;
+  clobApiUrl: string;
+  signatureType: number;
+}
+
+export interface CreateOrderRequest {
+  tokenId: string;
+  side: OrderSide;
+  price: number;
+  size: number;
+  outcome: string;
+  negRisk?: boolean;
+  expirationTimestamp?: number;
+}
+
+export interface Order {
+  orderId: string;
+  tokenId: string;
+  side: OrderSide;
+  price: number;
+  size: number;
+  filledSize: number;
+  outcome: string;
+  status: 'PENDING' | 'OPEN' | 'MATCHED' | 'CANCELLED' | 'FAILED';
+  timestamp: Date;
+  orderType?: 'GTC' | 'GTD';
+  expirationTime?: Date;
+}
+
+export interface OrderUpdate {
+  orderId: string;
+  status: Order['status'];
+  filledSize?: number;
+  message?: string;
+}

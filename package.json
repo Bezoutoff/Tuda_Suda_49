@@ -1,0 +1,35 @@
+{
+  "name": "tuda-suda-49",
+  "version": "1.0.0",
+  "description": "BTC Updown 15m Auto-Order Bot for Polymarket",
+  "main": "src/bot.ts",
+  "scripts": {
+    "start": "ts-node src/bot.ts",
+    "build": "tsc",
+    "dev": "ts-node-dev src/bot.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bezoutoff/Tuda_Suda_49.git"
+  },
+  "keywords": [
+    "polymarket",
+    "trading",
+    "bot",
+    "btc"
+  ],
+  "author": "Bezoutoff",
+  "license": "MIT",
+  "dependencies": {
+    "@polymarket/clob-client": "^4.22.8",
+    "@polymarket/real-time-data-client": "^1.4.0",
+    "dotenv": "^17.2.3",
+    "ethers": "^5.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  }
+}
