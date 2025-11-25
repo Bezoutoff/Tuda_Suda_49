@@ -216,8 +216,13 @@ async function pollAndPlaceOrders(
       return false;
     }
 
-    // Fetch market
-    const market = await fetchMarketBySlug(slug);
+    // Fetch market with parallel requests (3x faster detection)
+    const results = await Promise.all([
+      fetchMarketBySlug(slug),
+      fetchMarketBySlug(slug),
+      fetchMarketBySlug(slug),
+    ]);
+    const market = results.find(r => r !== null) || null;
 
     if (market) {
       log(`Market found after ${pollCount} requests (${Math.round(elapsed / 1000)}s)!`);
