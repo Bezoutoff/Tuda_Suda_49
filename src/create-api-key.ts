@@ -12,7 +12,7 @@ async function main() {
 
   if (!pk) {
     console.error("Usage: npx ts-node src/create-api-key.ts <PRIVATE_KEY>");
-    console.error("Example: npx ts-node src/create-api-key.ts 77cd4b4ed58419ac4bbf1f30edb485a5f0d19aad13c486abc5651b22d76abe42");
+    console.error("Example: npx ts-node src/create-api-key.ts YOUR_PRIVATE_KEY_HERE");
     process.exit(1);
   }
 
