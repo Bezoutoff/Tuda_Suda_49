@@ -1,0 +1,225 @@
+# CLAUDE.md - Документация проекта Tuda Suda 49
+
+## Обзор проекта
+
+**Tuda Suda 49** — автоматический бот для торговли на Polymarket. Бот отслеживает появление новых BTC updown 15-минутных маркетов и мгновенно размещает ордера на покупку по 49 центов на оба исхода (YES и NO).
+
+### Название
+"Туда-Сюда 49" — отражает стратегию: ставим и туда (YES), и сюда (NO) по 49 центов.
+
+### Стратегия
+BTC updown маркеты — это краткосрочные (15 минут) бинарные опционы на движение цены Bitcoin. Стратегия заключается в том, чтобы быть первым в очереди на обоих исходах по выгодной цене 49¢. Если ордер исполнится по 49¢, а реальная вероятность ~50%, то есть небольшое преимущество.
+
+## Архитектура
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Tuda Suda 49 Bot                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐    ┌─────────────────┐                │
+│  │ WebSocket       │    │ Trading         │                │
+│  │ Client (RTDS)   │───▶│ Service         │                │
+│  └─────────────────┘    └─────────────────┘                │
+│          │                      │                          │
+│          │                      │                          │
+│          ▼                      ▼                          │
+│  ┌─────────────────┐    ┌─────────────────┐                │
+│  │ Market Filter   │    │ CLOB Client     │                │
+│  │ (btc-updown-15m)│    │ (Order API)     │                │
+│  └─────────────────┘    └─────────────────┘                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Компоненты
+
+1. **WebSocket Client** (`@polymarket/real-time-data-client`)
+   - Подключается к Polymarket RTDS (Real-Time Data Service)
+   - Подписывается на topic `clob_market`, type `market_created`
+   - Получает уведомления о создании новых маркетов в реальном времени
+
+2. **Market Filter**
+   - Фильтрует входящие маркеты по паттерну `btc-updown-15m`
+   - Извлекает timestamp начала торгов из slug (например: `btc-updown-15m-1764054900`)
+   - Предотвращает дублирование обработки
+
+3. **Trading Service** (`@polymarket/clob-client`)
+   - Создаёт и отправляет лимитные ордера на биржу
+   - Поддерживает GTD (Good-Til-Date) ордера с автоматической отменой
+   - Использует POLY_PROXY signature type для подписи
+
+## Файловая структура
+
+```
+Tuda_Suda_49/
+├── src/
+│   ├── bot.ts              # Entry point, основная логика бота
+│   ├── config.ts           # Конфигурация бота и trading
+│   ├── trading-service.ts  # Сервис создания ордеров (упрощённый)
+│   └── types.ts            # TypeScript типы
+├── package.json            # Зависимости и скрипты
+├── tsconfig.json           # Конфигурация TypeScript
+├── .env                    # Секреты (НЕ в git!)
+├── .env.example            # Пример конфигурации
+├── .gitignore
+├── README.md               # Инструкция для пользователей
+└── CLAUDE.md               # Этот файл (документация для Claude)
+```
+
+## Ключевые файлы
+
+### src/bot.ts
+Основной файл бота. Содержит:
+- `main()` — инициализация и запуск
+- `handleMarketCreated()` — обработка нового маркета
+- `placeAutoOrders()` — размещение ордеров YES и NO
+- `fetchTokenIdsFromGamma()` — fallback для получения token IDs
+
+### src/config.ts
+Конфигурация:
+- `BOT_CONFIG` — параметры бота (паттерн маркета, цена, размер)
+- `tradingConfig` — настройки trading service из .env
+- Вспомогательные функции: `getOrderSize()`, `extractStartTimestamp()`, `isBtcUpdownMarket()`
+
+### src/trading-service.ts
+Упрощённая версия trading service из live-trade-PM:
+- `createLimitOrder()` — создание лимитного ордера
+- `cancelOrder()` — отмена ордера
+- Поддержка GTC и GTD ордеров
+
+### src/types.ts
+TypeScript типы:
+- `TradingConfig` — конфигурация trading service
+- `CreateOrderRequest` — параметры создания ордера
+- `Order` — структура ордера
+- `OrderUpdate` — обновление статуса
+
+## Конфигурация (.env)
+
+```env
+# Приватный ключ кошелька (64 символа БЕЗ 0x)
+PK=your_private_key_here
+
+# API credentials для Polymarket CLOB
+CLOB_API_KEY=your_api_key
+CLOB_SECRET=your_secret
+CLOB_PASS_PHRASE=your_passphrase
+
+# Адрес funder (для POLY_PROXY, опционально)
+FUNDER=0x...
+
+# Размер ордера в USDC
+BOT_ORDER_SIZE=10
+```
+
+## Логика работы
+
+### 1. Запуск
+```
+npm start
+```
+- Загружает .env
+- Инициализирует TradingService
+- Подключается к Polymarket RTDS
+- Подписывается на `market_created`
+
+### 2. Получение нового маркета
+Когда Polymarket создаёт новый маркет, RTDS отправляет сообщение:
+```json
+{
+  "type": "market_created",
+  "slug": "btc-updown-15m-1764054900",
+  "tokens": [
+    { "token_id": "123...", "outcome": "Up" },
+    { "token_id": "456...", "outcome": "Down" }
+  ]
+}
+```
+
+### 3. Фильтрация
+Бот проверяет:
+- Содержит ли slug паттерн `btc-updown-15m`
+- Не обрабатывался ли этот маркет ранее
+
+### 4. Извлечение данных
+- Timestamp начала: `1764054900` из slug
+- Token IDs для YES и NO из сообщения или Gamma API
+
+### 5. Размещение ордеров
+Два GTD ордера:
+- **YES** @ 0.49 (49 центов)
+- **NO** @ 0.49 (49 центов)
+
+GTD expiration = timestamp начала торгов - 60 секунд (буфер)
+
+## API и зависимости
+
+### Polymarket APIs
+- **RTDS WebSocket**: `wss://...` — real-time события
+- **CLOB REST API**: `https://clob.polymarket.com` — создание ордеров
+- **Gamma API**: `https://gamma-api.polymarket.com` — информация о маркетах
+
+### npm зависимости
+```json
+{
+  "@polymarket/clob-client": "^4.22.8",
+  "@polymarket/real-time-data-client": "^1.4.0",
+  "dotenv": "^17.2.3",
+  "ethers": "^5.8.0"
+}
+```
+
+## Связь с live-trade-PM
+
+Этот проект был выделен из `live-trade-PM` (торговый терминал). Ключевые отличия:
+
+| Аспект | live-trade-PM | Tuda_Suda_49 |
+|--------|---------------|--------------|
+| Назначение | Ручная торговля с UI | Автоматический бот |
+| UI | Electron + HTML | Нет (только консоль) |
+| Парсеры | Bwin, Pinnacle, Polymarket | Только Polymarket |
+| Trading Service | Полная версия | Упрощённая версия |
+| Размер | ~50+ файлов | 4 файла в src/ |
+
+## Команды
+
+```bash
+# Запуск бота
+npm start
+
+# Запуск в dev режиме (с перезапуском при изменениях)
+npm run dev
+
+# Компиляция TypeScript
+npm run build
+```
+
+## Возможные улучшения
+
+1. **Мониторинг исполнения** — отслеживание fills через RTDS `clob_user` topic
+2. **Динамическая цена** — анализ order book перед размещением
+3. **Множественные паттерны** — поддержка других updown маркетов (ETH, SOL)
+4. **Telegram уведомления** — оповещения о новых маркетах и исполнении
+5. **Логирование в файл** — сохранение истории операций
+6. **Graceful shutdown** — корректное завершение при остановке
+
+## Troubleshooting
+
+### Ошибка "API credentials required"
+Проверьте что в .env заданы CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE
+
+### Ордера не создаются
+1. Проверьте баланс USDC на Polymarket
+2. Проверьте что funder address корректный
+3. Проверьте логи на ошибки от CLOB API
+
+### Бот не видит новые маркеты
+1. Проверьте подключение к RTDS (должен быть лог "Connected")
+2. Убедитесь что подписка активна ("Subscribed to market_created")
+3. BTC updown маркеты создаются каждые 15 минут
+
+## История
+
+- **2025-11-25**: Создан проект, выделен из live-trade-PM
+- Репозиторий: https://github.com/Bezoutoff/Tuda_Suda_49
