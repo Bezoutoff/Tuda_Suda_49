@@ -25,11 +25,11 @@ export const BOT_CONFIG = {
   EXPIRATION_BUFFER_SECONDS: 60,
 
   // Polling intervals (bot-polling.ts)
-  POLL_INTERVAL_MS: 150,        // Интервал между запросами к Gamma API
-  ORDER_RETRY_INTERVAL_MS: 10, // Интервал между попытками ордеров
+  POLL_INTERVAL_MS: 250,        // Интервал между запросами к Gamma API
+  ORDER_RETRY_INTERVAL_MS: 5, // Интервал между попытками ордеров
   MAX_ORDER_ATTEMPTS: 5000,       // Максимум попыток (~5 секунд)
   START_POLLING_BEFORE_MS: 60000, // Начать polling за 60 секунд до времени
-  POLL_TIMEOUT_MS: 15 * 60 * 1000, // Таймаут polling (5 минут)
+  POLL_TIMEOUT_MS: 20 * 60 * 1000, // Таймаут polling (5 минут)
 
   // Logging prefix
   LOG_PREFIX: '[UPDOWN-BOT]',
