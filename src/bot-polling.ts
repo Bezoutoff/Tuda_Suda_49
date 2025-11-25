@@ -188,7 +188,13 @@ async function pollAndPlaceOrders(
       log(`  YES Token: ${market.yesTokenId.slice(0, 20)}...`);
       log(`  NO Token: ${market.noTokenId.slice(0, 20)}...`);
 
-      // Place orders immediately (spam until success)
+      // Wait before starting spam (market needs ~25s to become active)
+      if (BOT_CONFIG.DELAY_BEFORE_SPAM_MS > 0) {
+        log(`Waiting ${BOT_CONFIG.DELAY_BEFORE_SPAM_MS / 1000}s before starting order spam...`);
+        await new Promise(resolve => setTimeout(resolve, BOT_CONFIG.DELAY_BEFORE_SPAM_MS));
+      }
+
+      // Place orders (spam until success)
       return await spamOrdersUntilSuccess(
         tradingService,
         market.yesTokenId,
