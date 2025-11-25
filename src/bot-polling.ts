@@ -103,78 +103,42 @@ async function spamOrdersUntilSuccess(
   const MAX_ORDER_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
 
   let yesOrderPlaced = false;
-  let noOrderPlaced = false;
   let attempts = 0;
   const startTime = Date.now();
 
-  while ((!yesOrderPlaced || !noOrderPlaced) && attempts < MAX_ORDER_ATTEMPTS) {
+  while (!yesOrderPlaced && attempts < MAX_ORDER_ATTEMPTS) {
     attempts++;
 
-    // Place YES and NO orders in PARALLEL
-    const promises: Promise<void>[] = [];
+    try {
+      const yesOrder = await tradingService.createLimitOrder({
+        tokenId: yesTokenId,
+        side: 'BUY',
+        price: price,
+        size: size,
+        outcome: 'YES',
+        expirationTimestamp: expirationTimestamp,
+        negRisk: false,
+      });
+      yesOrderPlaced = true;
+      log(`YES order placed: ${yesOrder.orderId} (attempt ${attempts})`);
+    } catch (error: any) {
+      if (attempts % 100 === 0) {
+        log(`YES order attempt ${attempts}: ${error.message}`);
+      }
+    }
 
     if (!yesOrderPlaced) {
-      promises.push(
-        tradingService.createLimitOrder({
-          tokenId: yesTokenId,
-          side: 'BUY',
-          price: price,
-          size: size,
-          outcome: 'YES',
-          expirationTimestamp: expirationTimestamp,
-          negRisk: false,
-        })
-        .then(yesOrder => {
-          yesOrderPlaced = true;
-          log(`YES order placed: ${yesOrder.orderId} (attempt ${attempts})`);
-        })
-        .catch(error => {
-          if (attempts % 50 === 0) {
-            log(`YES order attempt ${attempts}: ${error.message}`);
-          }
-        })
-      );
-    }
-
-    if (!noOrderPlaced) {
-      promises.push(
-        tradingService.createLimitOrder({
-          tokenId: noTokenId,
-          side: 'BUY',
-          price: price,
-          size: size,
-          outcome: 'NO',
-          expirationTimestamp: expirationTimestamp,
-          negRisk: false,
-        })
-        .then(noOrder => {
-          noOrderPlaced = true;
-          log(`NO order placed: ${noOrder.orderId} (attempt ${attempts})`);
-        })
-        .catch(error => {
-          if (attempts % 50 === 0) {
-            log(`NO order attempt ${attempts}: ${error.message}`);
-          }
-        })
-      );
-    }
-
-    await Promise.all(promises);
-
-    if (!yesOrderPlaced || !noOrderPlaced) {
       await new Promise(resolve => setTimeout(resolve, ORDER_RETRY_INTERVAL_MS));
     }
   }
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);
 
-  if (yesOrderPlaced && noOrderPlaced) {
-    log(`*** BOTH ORDERS PLACED! (${attempts} attempts, ${elapsed}s) ***`);
+  if (yesOrderPlaced) {
+    log(`*** YES ORDER PLACED! (${attempts} attempts, ${elapsed}s) ***`);
     return true;
   } else {
-    logError(`Failed to place all orders after ${attempts} attempts (${elapsed}s)`);
-    log(`  YES: ${yesOrderPlaced ? 'OK' : 'FAILED'}`);
-    log(`  NO: ${noOrderPlaced ? 'OK' : 'FAILED'}`);
+    logError(`Failed to place YES order after ${attempts} attempts (${elapsed}s)`);
     return false;
   }
 }
