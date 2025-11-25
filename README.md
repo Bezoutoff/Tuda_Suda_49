@@ -10,6 +10,8 @@ BTC Updown 15m Auto-Order Bot для Polymarket.
 npm install
 cp .env.example .env
 # Заполните .env своими credentials
+
+# Тест ордеров: npm run test-order btc-updown-15m-1764059400
 ```
 
 ## Запуск

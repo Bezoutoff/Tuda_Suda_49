@@ -6,21 +6,33 @@ import { TradingConfig } from './types';
 
 // Bot configuration
 export const BOT_CONFIG = {
-  // Market filter pattern
-  MARKET_SLUG_PATTERN: 'btc-updown-15m',
+  // Market filter patterns (all supported updown 15m markets)
+  MARKET_PATTERNS: [
+    'btc-updown-15m',
+    'eth-updown-15m',
+    'sol-updown-15m',
+    'xrp-updown-15m',
+  ],
 
   // Order parameters
   ORDER_PRICE: 0.49,  // 49 cents for both YES and NO
 
   // Default order size (can be overridden by BOT_ORDER_SIZE env var)
-  DEFAULT_ORDER_SIZE: 10,
+  DEFAULT_ORDER_SIZE: 5,
 
   // Buffer before market start (seconds)
   // GTD orders will expire this many seconds before trading starts
   EXPIRATION_BUFFER_SECONDS: 60,
 
+  // Polling intervals (bot-polling.ts)
+  POLL_INTERVAL_MS: 150,        // Интервал между запросами к Gamma API
+  ORDER_RETRY_INTERVAL_MS: 10, // Интервал между попытками ордеров
+  MAX_ORDER_ATTEMPTS: 5000,       // Максимум попыток (~5 секунд)
+  START_POLLING_BEFORE_MS: 60000, // Начать polling за 60 секунд до времени
+  POLL_TIMEOUT_MS: 15 * 60 * 1000, // Таймаут polling (5 минут)
+
   // Logging prefix
-  LOG_PREFIX: '[BTC-BOT]',
+  LOG_PREFIX: '[UPDOWN-BOT]',
 };
 
 // Trading configuration (from .env)
@@ -86,16 +98,28 @@ export function getOrderSize(): number {
 /**
  * Extract start timestamp from market slug
  * Example: btc-updown-15m-1764054900 -> 1764054900
+ * Example: eth-updown-15m-1764054900 -> 1764054900
  */
 export function extractStartTimestamp(slug: string): number | null {
-  const match = slug.match(/btc-updown-15m-(\d+)/);
+  // Match any updown-15m pattern with timestamp
+  const match = slug.match(/(?:btc|eth|sol|xrp)-updown-15m-(\d+)/);
   if (!match) return null;
   return parseInt(match[1], 10);
 }
 
 /**
- * Check if slug matches BTC updown 15m pattern
+ * Check if slug matches any supported updown 15m pattern
  */
-export function isBtcUpdownMarket(slug: string): boolean {
-  return slug.includes(BOT_CONFIG.MARKET_SLUG_PATTERN);
+export function isUpdownMarket(slug: string): boolean {
+  return BOT_CONFIG.MARKET_PATTERNS.some(pattern => slug.includes(pattern));
 }
+
+/**
+ * Get matched pattern from slug (for logging)
+ */
+export function getMatchedPattern(slug: string): string | null {
+  return BOT_CONFIG.MARKET_PATTERNS.find(pattern => slug.includes(pattern)) || null;
+}
+
+// Backward compatibility alias
+export const isBtcUpdownMarket = isUpdownMarket;

@@ -18,7 +18,8 @@ import {
   validateTradingConfig,
   getOrderSize,
   extractStartTimestamp,
-  isBtcUpdownMarket,
+  isUpdownMarket,
+  getMatchedPattern,
 } from './config';
 
 // Logger with timestamp
@@ -169,94 +170,161 @@ async function fetchTokenIdsFromGamma(slugOrCondition: string): Promise<{ yes: s
 }
 
 /**
+ * Fetch market info from Gamma API by condition_id
+ */
+async function fetchMarketInfoByConditionId(conditionId: string): Promise<{
+  slug: string;
+  yesTokenId: string;
+  noTokenId: string;
+  negRisk: boolean;
+} | null> {
+  try {
+    // Query Gamma API by condition_id
+    const url = `https://gamma-api.polymarket.com/markets?condition_id=${conditionId}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const markets = await response.json() as any[];
+    if (!markets || markets.length === 0) {
+      return null;
+    }
+
+    const market = markets[0];
+    const slug = market.slug || market.question || '';
+
+    let clobTokenIds = market.clobTokenIds;
+    if (typeof clobTokenIds === 'string') {
+      clobTokenIds = JSON.parse(clobTokenIds);
+    }
+
+    if (!clobTokenIds || clobTokenIds.length < 2) {
+      return null;
+    }
+
+    return {
+      slug,
+      yesTokenId: clobTokenIds[0],
+      noTokenId: clobTokenIds[1],
+      negRisk: market.negRisk || false,
+    };
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
  * Handle incoming market_created message
+ *
+ * Message format from RTDS:
+ * {
+ *   "asset_ids": ["token1", "token2"],
+ *   "market": "0x...",  // condition_id
+ *   "min_order_size": "5",
+ *   "neg_risk": false,
+ *   "tick_size": "0.01"
+ * }
  */
 async function handleMarketCreated(message: any) {
-  // Debug: log raw message structure
-  log('Received message:', JSON.stringify(message, null, 2));
+  // Extract from RTDS message format
+  const payload = message.payload || message;
+  const conditionId = payload.market || payload.condition_id || '';
+  const assetIds = payload.asset_ids || [];
 
-  // Extract market info
-  const slug = message.slug || message.market_slug || message.condition_id || '';
-  const conditionId = message.condition_id || message.market || '';
-
-  // Skip if not BTC updown market
-  if (!isBtcUpdownMarket(slug) && !isBtcUpdownMarket(conditionId)) {
+  if (!conditionId) {
     return;
   }
-
-  const marketKey = slug || conditionId;
 
   // Skip if already processed
-  if (processedMarkets.has(marketKey)) {
-    log(`Market ${marketKey} already processed. Skipping.`);
+  if (processedMarkets.has(conditionId)) {
     return;
   }
 
-  log(`New BTC updown market detected: ${marketKey}`);
+  log(`New market detected: ${conditionId.slice(0, 16)}...`);
 
-  // Extract start timestamp from slug
-  const startTimestamp = extractStartTimestamp(slug) || extractStartTimestamp(conditionId);
-  if (!startTimestamp) {
-    logError(`Could not extract start timestamp from: ${slug || conditionId}`);
-    return;
-  }
-
-  // Get token IDs for YES and NO
+  // Fetch market info from Gamma API with retry
+  let slug = '';
   let yesTokenId: string | null = null;
   let noTokenId: string | null = null;
 
-  if (message.tokens && Array.isArray(message.tokens)) {
-    for (const token of message.tokens) {
-      const outcome = (token.outcome || '').toUpperCase();
-      if (outcome === 'YES' || outcome.includes('UP')) {
-        yesTokenId = token.token_id || token.tokenId;
-      } else if (outcome === 'NO' || outcome.includes('DOWN')) {
-        noTokenId = token.token_id || token.tokenId;
-      }
-    }
-  } else if (message.clobTokenIds) {
-    const tokenIds = typeof message.clobTokenIds === 'string'
-      ? JSON.parse(message.clobTokenIds)
-      : message.clobTokenIds;
-    yesTokenId = tokenIds[0];
-    noTokenId = tokenIds[1];
+  // First try to use asset_ids from message
+  if (assetIds.length >= 2) {
+    yesTokenId = assetIds[0];
+    noTokenId = assetIds[1];
   }
 
-  // Try fetching from Gamma API if not found
-  if (!yesTokenId || !noTokenId) {
-    log('Will try to fetch from Gamma API...');
+  // Fetch slug from Gamma API with retry (indexing may take time)
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const tokenIds = await fetchTokenIdsFromGamma(slug || conditionId);
-      if (tokenIds) {
-        yesTokenId = tokenIds.yes;
-        noTokenId = tokenIds.no;
+      if (attempt > 1) {
+        log(`Retry ${attempt}/${MAX_RETRIES} - waiting for Gamma API...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      }
+
+      const marketInfo = await fetchMarketInfoByConditionId(conditionId);
+
+      if (marketInfo && marketInfo.slug) {
+        slug = marketInfo.slug;
+        yesTokenId = marketInfo.yesTokenId;
+        noTokenId = marketInfo.noTokenId;
+        log(`Market slug: ${slug}`);
+        break;
       }
     } catch (error: any) {
-      logError('Failed to fetch from Gamma API:', error.message);
+      if (attempt === MAX_RETRIES) {
+        logError('Failed to fetch from Gamma API after retries:', error.message);
+      }
     }
   }
 
+  // Check if this is an updown market
+  const matchedPattern = getMatchedPattern(slug);
+  if (!matchedPattern) {
+    // Only log if we got a slug (otherwise it's likely not indexed yet)
+    if (slug) {
+      log(`Not a target updown market (slug: ${slug}). Skipping.`);
+    }
+    return;
+  }
+
+  log(`*** ${matchedPattern.toUpperCase()} MARKET FOUND: ${slug} ***`);
+
+  // Extract start timestamp from slug
+  const startTimestamp = extractStartTimestamp(slug);
+  if (!startTimestamp) {
+    logError(`Could not extract start timestamp from slug: ${slug}`);
+    return;
+  }
+
   if (!yesTokenId || !noTokenId) {
-    logError(`Could not get token IDs for market ${marketKey}`);
+    logError(`Could not get token IDs for market ${slug}`);
     return;
   }
 
   // Mark as processed
-  processedMarkets.add(marketKey);
+  processedMarkets.add(conditionId);
 
   // Place orders
-  await placeAutoOrders(yesTokenId, noTokenId, startTimestamp, marketKey);
+  await placeAutoOrders(yesTokenId, noTokenId, startTimestamp, slug);
 }
 
 /**
  * Handle WebSocket message
  */
-function handleMessage(message: any) {
+function handleMessage(client: any, message: any) {
   try {
     const data = typeof message === 'string' ? JSON.parse(message) : message;
-    const msgType = data.type || data.event_type || '';
 
-    if (msgType === 'market_created' || msgType.includes('market')) {
+    // Check topic and type from RTDS format
+    const topic = data.topic || '';
+    const msgType = data.type || '';
+
+    if (topic === 'clob_market' && msgType === 'market_created') {
       handleMarketCreated(data);
     }
   } catch (error: any) {
@@ -268,15 +336,28 @@ function handleMessage(message: any) {
  * Main bot function
  */
 async function main() {
-  log('Starting BTC Updown Auto-Order Bot...');
+  log('Starting Updown Auto-Order Bot...');
   log(`Order size: ${getOrderSize()} USDC`);
   log(`Order price: ${BOT_CONFIG.ORDER_PRICE} (${BOT_CONFIG.ORDER_PRICE * 100} cents)`);
-  log(`Market pattern: ${BOT_CONFIG.MARKET_SLUG_PATTERN}`);
+  log(`Market patterns: ${BOT_CONFIG.MARKET_PATTERNS.join(', ')}`);
 
   // Initialize trading service
   const tradingOk = initTradingService();
   if (!tradingOk) {
     logError('Cannot start bot without trading service');
+    process.exit(1);
+  }
+
+  // CLOB authentication for WebSocket subscription
+  const clobAuth = {
+    key: process.env.CLOB_API_KEY || '',
+    secret: process.env.CLOB_SECRET || '',
+    passphrase: process.env.CLOB_PASS_PHRASE || ''
+  };
+
+  // Verify credentials
+  if (!clobAuth.key || !clobAuth.secret || !clobAuth.passphrase) {
+    logError('Missing CLOB API credentials for WebSocket authentication');
     process.exit(1);
   }
 
@@ -286,17 +367,18 @@ async function main() {
     onConnect: () => {
       log('Connected to Polymarket RTDS');
 
-      // Subscribe to market_created events
+      // Subscribe to market_created events WITH authentication
       client.subscribe({
         subscriptions: [
           {
             topic: 'clob_market',
             type: 'market_created',
+            clob_auth: clobAuth,  // <-- IMPORTANT: Authentication required!
           },
         ],
       });
 
-      log('Subscribed to market_created events');
+      log('Subscribed to market_created events (with auth)');
       log('Waiting for new BTC updown markets...');
     },
   });
