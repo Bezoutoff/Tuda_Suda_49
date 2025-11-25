@@ -267,27 +267,45 @@ async function main() {
   const manualSlug = process.argv[2];
 
   if (manualSlug) {
-    // Manual mode - poll for specific market
+    // Manual mode - poll for specific market, then continue to next
     log(`\n${'='.repeat(60)}`);
     log(`MANUAL MODE: ${manualSlug}`);
     log(`${'='.repeat(60)}`);
 
-    // Extract timestamp from slug
-    const match = manualSlug.match(/-(\d+)$/);
-    const marketTimestamp = match ? parseInt(match[1]) : Math.floor(Date.now() / 1000) + 900;
-
-    log(`Market timestamp: ${formatTimestamp(marketTimestamp)}`);
-    log(`Starting polling immediately...`);
-
-    const success = await pollAndPlaceOrders(tradingService, manualSlug, marketTimestamp);
-
-    if (success) {
-      log(`Market ${manualSlug} processed successfully!`);
-    } else {
-      logError(`Failed to process market ${manualSlug}`);
+    // Extract timestamp and pattern from slug
+    const match = manualSlug.match(/^(.+)-(\d+)$/);
+    if (!match) {
+      logError(`Invalid slug format: ${manualSlug}`);
+      return;
     }
 
-    return;
+    const pattern = match[1]; // e.g., "btc-updown-15m"
+    let marketTimestamp = parseInt(match[2]);
+
+    // Continuous loop
+    while (true) {
+      const slug = `${pattern}-${marketTimestamp}`;
+
+      log(`\n${'='.repeat(60)}`);
+      log(`Processing: ${slug}`);
+      log(`Market time: ${formatTimestamp(marketTimestamp)}`);
+      log(`${'='.repeat(60)}`);
+
+      const success = await pollAndPlaceOrders(tradingService, slug, marketTimestamp);
+
+      if (success) {
+        log(`Market ${slug} processed successfully!`);
+      } else {
+        logError(`Failed to process market ${slug}`);
+      }
+
+      // Move to next market (+900 seconds)
+      marketTimestamp += INTERVAL_SECONDS;
+      log(`Next market: ${pattern}-${marketTimestamp} at ${formatTimestamp(marketTimestamp)}`);
+
+      // Small delay before next iteration
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
 
   // Auto mode - calculate next market
