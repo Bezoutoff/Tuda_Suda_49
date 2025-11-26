@@ -52,7 +52,9 @@ export class TradingService {
         this.wallet,
         creds,
         this.config.signatureType,
-        this.funder
+        this.funder,
+        undefined,  // baseUrl (deprecated)
+        true        // useServerTime - использовать время сервера для POLY_TIMESTAMP
       );
 
       this.isInitialized = true;
