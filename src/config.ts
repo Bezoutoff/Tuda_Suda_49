@@ -30,7 +30,8 @@ export const BOT_CONFIG = {
   MAX_ORDER_ATTEMPTS: 5000,     // Максимум попыток
   START_POLLING_BEFORE_MS: 60000, // Начать polling за 60 секунд до времени
   POLL_TIMEOUT_MS: 20 * 60 * 1000, // Таймаут polling
-  DELAY_BEFORE_SPAM_MS: 19000,  // Задержка между получением tokenID и началом спама (15 сек)
+  DELAY_BEFORE_SPAM_MS: 19000,  // Задержка между получением tokenID и началом спама
+  PARALLEL_SPAM_REQUESTS: 60,   // Кол-во параллельных запросов (лимит 240 req/s)
 
   // Logging prefix
   LOG_PREFIX: '[UPDOWN-BOT]',

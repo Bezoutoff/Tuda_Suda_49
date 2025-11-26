@@ -121,26 +121,46 @@ async function spamOrdersUntilSuccess(
     return false;
   }
 
-  // SPAM: отправляем подписанный ордер пока не пройдёт
+  // SPAM: отправляем подписанный ордер параллельно пока не пройдёт
   let yesOrderPlaced = false;
   let attempts = 0;
+  let successOrderId = '';
   const startTime = Date.now();
+  const PARALLEL = BOT_CONFIG.PARALLEL_SPAM_REQUESTS;
+
+  log(`Parallel spam: ${PARALLEL} concurrent requests`);
 
   while (!yesOrderPlaced && attempts < MAX_ORDER_ATTEMPTS) {
-    attempts++;
+    const batchStart = attempts;
+    const promises: Promise<any>[] = [];
 
-    try {
-      const result = await tradingService.postSignedOrder(signedOrder, expirationTimestamp);
-      yesOrderPlaced = true;
-      log(`YES order placed: ${result.orderId} (attempt ${attempts})`);
-    } catch (error: any) {
-      if (attempts % 100 === 0) {
-        log(`YES order attempt ${attempts}: ${error.message}`);
-      }
+    // Запускаем PARALLEL запросов одновременно
+    for (let i = 0; i < PARALLEL && attempts < MAX_ORDER_ATTEMPTS; i++) {
+      attempts++;
+      const currentAttempt = attempts;
+
+      promises.push(
+        tradingService.postSignedOrder(signedOrder, expirationTimestamp)
+          .then(result => {
+            if (!yesOrderPlaced) {
+              yesOrderPlaced = true;
+              successOrderId = result.orderId;
+              log(`YES order placed: ${result.orderId} (attempt ${currentAttempt})`);
+            }
+            return { success: true, attempt: currentAttempt };
+          })
+          .catch(() => ({ success: false, attempt: currentAttempt }))
+      );
     }
 
-    if (!yesOrderPlaced) {
-      await new Promise(resolve => setTimeout(resolve, ORDER_RETRY_INTERVAL_MS));
+    // Ждём завершения всех запросов батча
+    await Promise.all(promises);
+
+    // Логируем прогресс каждые 300 попыток
+    if (!yesOrderPlaced && attempts % 300 === 0) {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const rps = Math.round(attempts / elapsed);
+      log(`Attempt ${attempts}: ${elapsed}s elapsed, ~${rps} req/s`);
     }
   }
 
