@@ -60,6 +60,8 @@ function initTradingService(): boolean {
 
 /**
  * Place auto orders for a new BTC updown market
+ * 5 prices × 2 sides (UP/DOWN) = 10 orders
+ * Each price has its own expiration time
  */
 async function placeAutoOrders(
   yesTokenId: string,
@@ -73,54 +75,60 @@ async function placeAutoOrders(
   }
 
   const size = getOrderSize();
-  const price = BOT_CONFIG.ORDER_PRICE;
+  const orderConfig = BOT_CONFIG.ORDER_CONFIG;
 
-  // Calculate expiration (before trading starts)
-  const expirationTimestamp = startTimestamp - BOT_CONFIG.EXPIRATION_BUFFER_SECONDS;
-
-  // Check if expiration is in the future
+  // Check if market is still valid (use earliest expiration)
+  const earliestExpiration = startTimestamp - Math.max(...orderConfig.map(c => c.expirationBuffer));
   const nowSeconds = Math.floor(Date.now() / 1000);
-  if (expirationTimestamp <= nowSeconds) {
+  if (earliestExpiration <= nowSeconds) {
     log(`Market ${slug} has already started or expiration passed. Skipping.`);
     return;
   }
 
-  const expirationDate = new Date(expirationTimestamp * 1000);
   const startDate = new Date(startTimestamp * 1000);
 
   log(`Placing orders for ${slug}:`);
   log(`  Start time: ${startDate.toLocaleString('ru-RU')}`);
-  log(`  Expiration: ${expirationDate.toLocaleString('ru-RU')}`);
-  log(`  Size: ${size} | Price: ${price}`);
+  log(`  Size: ${size} | Config: ${orderConfig.map(c => `${c.price}(${c.expirationBuffer}s)`).join(', ')}`);
+  log(`  Total: ${orderConfig.length * 2} orders (${orderConfig.length} UP + ${orderConfig.length} DOWN)`);
 
   try {
-    // Place YES order
-    log(`Placing YES order: ${size} @ ${price}...`);
-    const yesOrder = await tradingService.createLimitOrder({
-      tokenId: yesTokenId,
-      side: 'BUY',
-      price: price,
-      size: size,
-      outcome: 'YES',
-      expirationTimestamp: expirationTimestamp,
-      negRisk: true,
-    });
-    log(`YES order placed: ${yesOrder.orderId}`);
+    let placedCount = 0;
+    const totalOrders = orderConfig.length * 2;
 
-    // Place NO order
-    log(`Placing NO order: ${size} @ ${price}...`);
-    const noOrder = await tradingService.createLimitOrder({
-      tokenId: noTokenId,
-      side: 'BUY',
-      price: price,
-      size: size,
-      outcome: 'NO',
-      expirationTimestamp: expirationTimestamp,
-      negRisk: true,
-    });
-    log(`NO order placed: ${noOrder.orderId}`);
+    for (const { price, expirationBuffer } of orderConfig) {
+      const expirationTimestamp = startTimestamp - expirationBuffer;
 
-    log(`Orders placed successfully for ${slug}`);
+      // Place UP (YES) order
+      log(`Placing UP @ ${price} (expires ${new Date(expirationTimestamp * 1000).toLocaleString('ru-RU')})...`);
+      const yesOrder = await tradingService.createLimitOrder({
+        tokenId: yesTokenId,
+        side: 'BUY',
+        price: price,
+        size: size,
+        outcome: 'YES',
+        expirationTimestamp: expirationTimestamp,
+        negRisk: true,
+      });
+      placedCount++;
+      log(`UP @ ${price} placed: ${yesOrder.orderId} (${placedCount}/${totalOrders})`);
+
+      // Place DOWN (NO) order
+      log(`Placing DOWN @ ${price} (expires ${new Date(expirationTimestamp * 1000).toLocaleString('ru-RU')})...`);
+      const noOrder = await tradingService.createLimitOrder({
+        tokenId: noTokenId,
+        side: 'BUY',
+        price: price,
+        size: size,
+        outcome: 'NO',
+        expirationTimestamp: expirationTimestamp,
+        negRisk: true,
+      });
+      placedCount++;
+      log(`DOWN @ ${price} placed: ${noOrder.orderId} (${placedCount}/${totalOrders})`);
+    }
+
+    log(`*** ALL ${totalOrders} ORDERS PLACED for ${slug} ***`);
   } catch (error: any) {
     logError(`Failed to place orders for ${slug}:`, error.message);
   }
@@ -338,7 +346,8 @@ function handleMessage(client: any, message: any) {
 async function main() {
   log('Starting Updown Auto-Order Bot...');
   log(`Order size: ${getOrderSize()} USDC`);
-  log(`Order price: ${BOT_CONFIG.ORDER_PRICE} (${BOT_CONFIG.ORDER_PRICE * 100} cents)`);
+  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c => `${c.price}(${c.expirationBuffer}s)`).join(', ')}`);
+  log(`Total: ${BOT_CONFIG.ORDER_CONFIG.length * 2} orders per market`);
   log(`Market patterns: ${BOT_CONFIG.MARKET_PATTERNS.join(', ')}`);
 
   // Initialize trading service

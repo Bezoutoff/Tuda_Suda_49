@@ -83,94 +83,127 @@ async function fetchMarketBySlug(slug: string): Promise<{
 }
 
 /**
- * Spam order placement until success
+ * Spam order placement until all 10 orders are placed
+ * 5 prices × 2 sides (UP/DOWN) = 10 orders
+ * Each price has its own expiration time
  */
 async function spamOrdersUntilSuccess(
   tradingService: TradingService,
-  yesTokenId: string,
-  noTokenId: string,
-  expirationTimestamp: number,
+  yesTokenId: string,   // UP token
+  noTokenId: string,    // DOWN token
+  marketTimestamp: number,
   slug: string
 ): Promise<boolean> {
   const size = getOrderSize();
-  const price = BOT_CONFIG.ORDER_PRICE;
+  const orderConfig = BOT_CONFIG.ORDER_CONFIG;
 
   log(`Starting order spam for ${slug}:`);
-  log(`  Size: ${size} | Price: ${price}`);
-  log(`  Expiration: ${formatTimestamp(expirationTimestamp)}`);
+  log(`  Size: ${size} | Prices: ${orderConfig.map(c => c.price).join(', ')}`);
+  log(`  Total orders: ${orderConfig.length * 2} (${orderConfig.length} UP + ${orderConfig.length} DOWN)`);
+  log(`  Expirations (sec before start): ${orderConfig.map(c => c.expirationBuffer).join(', ')}`);
 
-  const ORDER_RETRY_INTERVAL_MS = BOT_CONFIG.ORDER_RETRY_INTERVAL_MS;
   const MAX_ORDER_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
+  const PARALLEL = BOT_CONFIG.PARALLEL_SPAM_REQUESTS;
 
-  // PRE-SIGN: создаём и подписываем ордер ОДИН раз
-  log(`Pre-signing order...`);
-  let signedOrder: any;
+  // PRE-SIGN: создаём и подписываем все 10 ордеров
+  log(`Pre-signing ${orderConfig.length * 2} orders...`);
+
+  interface SignedOrderInfo {
+    signedOrder: any;
+    side: 'UP' | 'DOWN';
+    price: number;
+    expirationTimestamp: number;
+    placed: boolean;
+    orderId?: string;
+  }
+
+  const signedOrders: SignedOrderInfo[] = [];
+
   try {
-    signedOrder = await tradingService.createSignedOrder({
-      tokenId: yesTokenId,
-      side: 'BUY',
-      price: price,
-      size: size,
-      outcome: 'YES',
-      expirationTimestamp: expirationTimestamp,
-      negRisk: false,
-    });
-    log(`Order pre-signed successfully`);
+    for (const { price, expirationBuffer } of orderConfig) {
+      const expirationTimestamp = marketTimestamp - expirationBuffer;
+
+      // UP order (YES token)
+      const upOrder = await tradingService.createSignedOrder({
+        tokenId: yesTokenId,
+        side: 'BUY',
+        price,
+        size,
+        outcome: 'YES',
+        expirationTimestamp,
+        negRisk: false,
+      });
+      signedOrders.push({ signedOrder: upOrder, side: 'UP', price, expirationTimestamp, placed: false });
+
+      // DOWN order (NO token)
+      const downOrder = await tradingService.createSignedOrder({
+        tokenId: noTokenId,
+        side: 'BUY',
+        price,
+        size,
+        outcome: 'NO',
+        expirationTimestamp,
+        negRisk: false,
+      });
+      signedOrders.push({ signedOrder: downOrder, side: 'DOWN', price, expirationTimestamp, placed: false });
+
+      log(`  ${price}: expires ${formatTimestamp(expirationTimestamp)}`);
+    }
+    log(`All ${signedOrders.length} orders pre-signed successfully`);
   } catch (error: any) {
-    logError(`Failed to pre-sign order: ${error.message}`);
+    logError(`Failed to pre-sign orders: ${error.message}`);
     return false;
   }
 
-  // SPAM: отправляем подписанный ордер параллельно пока не пройдёт
-  let yesOrderPlaced = false;
-  let attempts = 0;
-  let successOrderId = '';
+  // SPAM: все 10 ордеров параллельно, пока все не пройдут
   const startTime = Date.now();
-  const PARALLEL = BOT_CONFIG.PARALLEL_SPAM_REQUESTS;
+  let totalAttempts = 0;
 
-  log(`Parallel spam: ${PARALLEL} concurrent requests`);
+  log(`Parallel spam: ${PARALLEL} concurrent requests per order`);
 
-  while (!yesOrderPlaced && attempts < MAX_ORDER_ATTEMPTS) {
-    const batchStart = attempts;
+  while (signedOrders.some(o => !o.placed) && totalAttempts < MAX_ORDER_ATTEMPTS * signedOrders.length) {
+    const pending = signedOrders.filter(o => !o.placed);
     const promises: Promise<any>[] = [];
 
-    // Запускаем PARALLEL запросов одновременно
-    for (let i = 0; i < PARALLEL && attempts < MAX_ORDER_ATTEMPTS; i++) {
-      attempts++;
-      const currentAttempt = attempts;
-
-      promises.push(
-        tradingService.postSignedOrder(signedOrder, expirationTimestamp)
-          .then(result => {
-            if (!yesOrderPlaced) {
-              yesOrderPlaced = true;
-              successOrderId = result.orderId;
-              log(`YES order placed: ${result.orderId} (attempt ${currentAttempt})`);
-            }
-            return { success: true, attempt: currentAttempt };
-          })
-          .catch(() => ({ success: false, attempt: currentAttempt }))
-      );
+    // Для каждого непроставленного ордера запускаем PARALLEL попыток
+    for (const order of pending) {
+      for (let i = 0; i < PARALLEL; i++) {
+        totalAttempts++;
+        promises.push(
+          tradingService.postSignedOrder(order.signedOrder, order.expirationTimestamp)
+            .then(result => {
+              if (!order.placed) {
+                order.placed = true;
+                order.orderId = result.orderId;
+                const placedCount = signedOrders.filter(o => o.placed).length;
+                log(`${order.side} @ ${order.price} placed: ${result.orderId} (${placedCount}/${signedOrders.length})`);
+              }
+            })
+            .catch(() => {})
+        );
+      }
     }
 
-    // Ждём завершения всех запросов батча
     await Promise.all(promises);
 
-    // Логируем прогресс каждые 300 попыток
-    if (!yesOrderPlaced && attempts % 300 === 0) {
+    // Логируем прогресс каждые 1000 попыток
+    if (totalAttempts % 1000 === 0) {
       const elapsed = Math.round((Date.now() - startTime) / 1000);
-      const rps = Math.round(attempts / elapsed);
-      log(`Attempt ${attempts}: ${elapsed}s elapsed, ~${rps} req/s`);
+      const placedCount = signedOrders.filter(o => o.placed).length;
+      log(`Progress: ${placedCount}/${signedOrders.length} placed, ${totalAttempts} attempts, ${elapsed}s`);
     }
   }
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);
+  const placedCount = signedOrders.filter(o => o.placed).length;
 
-  if (yesOrderPlaced) {
-    log(`*** YES ORDER PLACED! (${attempts} attempts, ${elapsed}s) ***`);
+  if (placedCount === signedOrders.length) {
+    log(`*** ALL ${signedOrders.length} ORDERS PLACED! (${totalAttempts} attempts, ${elapsed}s) ***`);
     return true;
   } else {
-    logError(`Failed to place YES order after ${attempts} attempts (${elapsed}s)`);
+    const failed = signedOrders.filter(o => !o.placed);
+    logError(`Failed to place ${failed.length} orders after ${totalAttempts} attempts (${elapsed}s):`);
+    failed.forEach(o => logError(`  - ${o.side} @ ${o.price}`));
     return false;
   }
 }
@@ -200,7 +233,6 @@ async function pollAndPlaceOrders(
 
   let pollCount = 0;
   const startTime = Date.now();
-  const expirationTimestamp = marketTimestamp - BOT_CONFIG.EXPIRATION_BUFFER_SECONDS;
 
   while (true) {
     pollCount++;
@@ -231,7 +263,7 @@ async function pollAndPlaceOrders(
         tradingService,
         market.yesTokenId,
         market.noTokenId,
-        expirationTimestamp,
+        marketTimestamp,
         slug
       );
     }
@@ -252,9 +284,10 @@ async function pollAndPlaceOrders(
 async function main() {
   log('Starting BTC Updown Polling Bot...');
   log(`Order size: ${getOrderSize()} USDC`);
-  log(`Order price: ${BOT_CONFIG.ORDER_PRICE} (${BOT_CONFIG.ORDER_PRICE * 100} cents)`);
+  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c => `${c.price}(${c.expirationBuffer}s)`).join(', ')}`);
+  log(`Total orders: ${BOT_CONFIG.ORDER_CONFIG.length * 2} (${BOT_CONFIG.ORDER_CONFIG.length} UP + ${BOT_CONFIG.ORDER_CONFIG.length} DOWN)`);
   log(`Poll interval: ${BOT_CONFIG.POLL_INTERVAL_MS}ms`);
-  log(`Order retry: ${BOT_CONFIG.ORDER_RETRY_INTERVAL_MS}ms, max ${BOT_CONFIG.MAX_ORDER_ATTEMPTS} attempts`);
+  log(`Parallel requests: ${BOT_CONFIG.PARALLEL_SPAM_REQUESTS} per order, max ${BOT_CONFIG.MAX_ORDER_ATTEMPTS} attempts`);
 
   // Initialize trading service
   if (!validateTradingConfig(tradingConfig)) {

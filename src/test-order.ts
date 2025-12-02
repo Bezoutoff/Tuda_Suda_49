@@ -123,10 +123,11 @@ async function testOrder() {
     return;
   }
 
-  // Calculate GTD expiration timestamp
+  // Calculate GTD expiration timestamp (use first order's buffer for test)
   let expirationTimestamp: number | undefined;
   if (startTimestamp) {
-    expirationTimestamp = startTimestamp - BOT_CONFIG.EXPIRATION_BUFFER_SECONDS;
+    const expirationBuffer = BOT_CONFIG.ORDER_CONFIG[0]?.expirationBuffer || 60;
+    expirationTimestamp = startTimestamp - expirationBuffer;
     const nowSeconds = Math.floor(Date.now() / 1000);
 
     if (expirationTimestamp <= nowSeconds) {

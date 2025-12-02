@@ -14,15 +14,17 @@ export const BOT_CONFIG = {
     'xrp-updown-15m',
   ],
 
-  // Order parameters
-  ORDER_PRICE: 0.49,  // 49 cents for both YES and NO
+  // Order config: price + expiration buffer (seconds before market start)
+  ORDER_CONFIG: [
+    { price: 0.49, expirationBuffer: 600 },  // 10 мин до старта
+    { price: 0.48, expirationBuffer: 360 },  // 6 мин до старта
+    { price: 0.47, expirationBuffer: 120 },  // 2 мин до старта
+    { price: 0.46, expirationBuffer: 30 },   // 30 сек до старта
+    { price: 0.45, expirationBuffer: 1 },    // 1 сек до старта
+  ],
 
   // Default order size (can be overridden by BOT_ORDER_SIZE env var)
   DEFAULT_ORDER_SIZE: 5,
-
-  // Buffer before market start (seconds)
-  // GTD orders will expire this many seconds before trading starts
-  EXPIRATION_BUFFER_SECONDS: 60,
 
   // Polling intervals (bot-polling.ts)
   POLL_INTERVAL_MS: 250,        // Интервал между запросами к Gamma API
@@ -31,7 +33,7 @@ export const BOT_CONFIG = {
   START_POLLING_BEFORE_MS: 60000, // Начать polling за 60 секунд до времени
   POLL_TIMEOUT_MS: 20 * 60 * 1000, // Таймаут polling
   DELAY_BEFORE_SPAM_MS: 19000,  // Задержка между получением tokenID и началом спама
-  PARALLEL_SPAM_REQUESTS: 60,   // Кол-во параллельных запросов (лимит 240 req/s)
+  PARALLEL_SPAM_REQUESTS: 20,   // Кол-во параллельных запросов на ордер (10 ордеров × 20 = 200 req/s, лимит 240)
 
   // Logging prefix
   LOG_PREFIX: '[UPDOWN-BOT]',
