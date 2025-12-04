@@ -184,60 +184,62 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`Signing took: ${signTime}ms`);
 
   // ===== PHASE 4: Spam orders =====
+  // Режим: 1 запрос каждую 1ms (continuous stream вместо batch)
+  const SPAM_INTERVAL_MS = 1;  // интервал между запросами
+
   log('');
-  log(`--- PHASE 4: Spamming orders (${PARALLEL_REQUESTS} parallel) ---`);
+  log(`--- PHASE 4: Spamming orders (1 request every ${SPAM_INTERVAL_MS}ms) ---`);
 
   const spamStart = Date.now();
   let totalAttempts = 0;
   let placed = false;
   let orderId = '';
   const latencies: number[] = [];
+  const pendingRequests: Promise<any>[] = [];
 
+  // Запускаем запросы с интервалом 1ms
   while (!placed && totalAttempts < MAX_ATTEMPTS) {
-    const batchStart = performance.now();
-    const promises: Promise<any>[] = [];
+    totalAttempts++;
+    const attemptNum = totalAttempts;
+    const reqStart = performance.now();
 
-    for (let i = 0; i < PARALLEL_REQUESTS; i++) {
-      totalAttempts++;
-      const attemptNum = totalAttempts;
-      const reqStart = performance.now();
+    const request = tradingService.postSignedOrder(signedOrder, expirationTimestamp)
+      .then(result => {
+        const latency = Math.round(performance.now() - reqStart);
+        latencies.push(latency);
+        logLatency(slug, 'UP', TEST_PRICE, latency, true);
+        logApiResponse(slug, latency, true, result.rawResponse);
+        if (!placed) {
+          placed = true;
+          orderId = result.orderId;
+          log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${orderId}`);
+          log(`  Full response: ${JSON.stringify(result.rawResponse)}`);
+        }
+        return { success: true, latency };
+      })
+      .catch(err => {
+        const latency = Math.round(performance.now() - reqStart);
+        latencies.push(latency);
+        logLatency(slug, 'UP', TEST_PRICE, latency, false, err.message);
+        logApiResponse(slug, latency, false, err.rawResponse || { error: err.message });
+        return { success: false, latency, error: err.message };
+      });
 
-      promises.push(
-        tradingService.postSignedOrder(signedOrder, expirationTimestamp)
-          .then(result => {
-            const latency = Math.round(performance.now() - reqStart);
-            latencies.push(latency);
-            logLatency(slug, 'UP', TEST_PRICE, latency, true);
-            logApiResponse(slug, latency, true, result.rawResponse);
-            if (!placed) {
-              placed = true;
-              orderId = result.orderId;
-              log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${orderId}`);
-              log(`  Full response: ${JSON.stringify(result.rawResponse)}`);
-            }
-          })
-          .catch(err => {
-            const latency = Math.round(performance.now() - reqStart);
-            latencies.push(latency);
-            logLatency(slug, 'UP', TEST_PRICE, latency, false, err.message);
-            logApiResponse(slug, latency, false, err.rawResponse || { error: err.message });
-          })
-      );
+    pendingRequests.push(request);
+
+    // Логируем каждые 100 запросов
+    if (totalAttempts % 100 === 0) {
+      const elapsed = Math.round((Date.now() - spamStart) / 100) / 10;
+      log(`#${totalAttempts}: ${elapsed}s elapsed, ${pendingRequests.length} in-flight`);
     }
 
-    await Promise.all(promises);
-
-    const batchLatency = Math.round(performance.now() - batchStart);
-    const successCount = placed ? 1 : 0;
-
-    if (!placed) {
-      // Log batch result
-      const batchNum = Math.ceil(totalAttempts / PARALLEL_REQUESTS);
-      const rangeStart = (batchNum - 1) * PARALLEL_REQUESTS + 1;
-      const rangeEnd = totalAttempts;
-      log(`#${rangeStart}-${rangeEnd}: ${batchLatency}ms batch - all failed`);
-    }
+    // Ждём 1ms перед следующим запросом
+    await new Promise(r => setTimeout(r, SPAM_INTERVAL_MS));
   }
+
+  // Ждём завершения всех pending запросов
+  log(`Waiting for ${pendingRequests.length} pending requests...`);
+  await Promise.all(pendingRequests);
 
   // ===== PHASE 5: Results =====
   log('');

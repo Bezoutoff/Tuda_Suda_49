@@ -211,4 +211,164 @@ timestamp,slug,side,price,latency_ms,success,error
 
 ---
 
-*Тест выполнен: 2025-12-04T11:07:21+0000*
+## 5. Полные ответы API (api-responses.log)
+
+Тест: `btc-updown-15m-1764936000` (2025-12-04T12:02)
+
+### Структура ответа Polymarket API
+
+```json
+{
+  "errorMsg": "string | empty",
+  "orderID": "string | empty",
+  "takingAmount": "string | empty",
+  "makingAmount": "string | empty",
+  "status": "string | empty",
+  "success": true
+}
+```
+
+**Примечание:** Поле `success: true` в ответе API не означает успех операции! Нужно проверять `errorMsg` и `orderID`.
+
+### Примеры ответов
+
+**1. Orderbook не существует (маркет не активен):**
+```json
+{
+  "timestamp": "2025-12-04T12:02:47.744Z",
+  "slug": "btc-updown-15m-1764936000",
+  "latencyMs": 481,
+  "success": false,
+  "response": {
+    "errorMsg": "the orderbook 86362524611116041012058324569056663539911098926631571012384588533603041653252 does not exist",
+    "orderID": "",
+    "takingAmount": "",
+    "makingAmount": "",
+    "status": "",
+    "success": true
+  }
+}
+```
+
+**2. Дубликат ордера (ордер уже принят):**
+```json
+{
+  "timestamp": "2025-12-04T12:02:47.745Z",
+  "slug": "btc-updown-15m-1764936000",
+  "latencyMs": 565,
+  "success": false,
+  "response": {
+    "errorMsg": "order 0xf197e2b85c614a2451d49061b00f19a3ab1274107ce347d2d6a7ef9771cffaf7 is invalid. Duplicated.",
+    "orderID": "",
+    "takingAmount": "",
+    "makingAmount": "",
+    "status": "",
+    "success": true
+  }
+}
+```
+
+### Расшифровка полей
+
+| Поле | Описание |
+|------|----------|
+| `errorMsg` | Текст ошибки (пустой при успехе) |
+| `orderID` | ID созданного ордера (пустой при ошибке) |
+| `takingAmount` | Сколько берём (shares) |
+| `makingAmount` | Сколько отдаём (USDC) |
+| `status` | Статус ордера |
+| `success` | **Всегда true** (не использовать для проверки!) |
+
+### Типы ошибок
+
+| Ошибка | Значение | Действие |
+|--------|----------|----------|
+| `orderbook ... does not exist` | Маркет ещё не активирован | Продолжать спамить |
+| `order ... is invalid. Duplicated.` | Ордер уже принят | Один из параллельных запросов успел |
+| `order ... already exists` | Ордер уже существует | Ордер размещён |
+
+---
+
+## 6. Расширенные тесты Traceroute
+
+### ICMP Traceroute
+```
+root@r1071642:~# traceroute -I clob.polymarket.com
+traceroute to clob.polymarket.com (172.64.153.51), 30 hops max, 60 byte packets
+ 1  50.114.177.1        1.377 ms
+ 2  100.71.1.254        1.072 ms
+ 3  cloudflare-b.ip4.torontointernetxchange.net (206.108.34.7)  1.383 ms
+ 4  108.162.239.4       8.685 ms
+ 5  172.64.153.51       1.612 ms
+```
+
+### TCP Traceroute (порт 443)
+```
+root@r1071642:~# traceroute -T -p 443 clob.polymarket.com
+traceroute to clob.polymarket.com (104.18.34.205), 30 hops max, 60 byte packets
+ 1  50.114.177.1        0.556 ms
+ 2  100.71.1.254        0.932 ms
+ 3  cloudflare-b.ip4.torontointernetxchange.net (206.108.34.7)  1.581 ms
+ 4  108.162.239.24      1.377 ms
+ 5  104.18.34.205       0.935 ms
+```
+
+### UDP Traceroute (IPv4)
+```
+root@r1071642:~# traceroute 104.18.34.205
+ 1  50.114.177.1        0.633 ms  0.541 ms  0.627 ms
+ 2  100.71.1.254        1.244 ms  1.326 ms  0.999 ms
+ 3  cloudflare-b.ip4.torontointernetxchange.net  1.130 ms
+ 4  108.162.239.24      3.020 ms  6.613 ms  6.564 ms
+ 5  104.18.34.205       0.978 ms  0.976 ms  1.178 ms
+```
+
+### IPv6 Traceroute
+```
+root@r1071642:~# traceroute6 clob.polymarket.com
+traceroute to clob.polymarket.com (2a06:98c1:3104::6812:22cd), 30 hops max, 80 byte packets
+ 1  _gateway (2605:e440:6::1)          0.948 ms
+ 2  2001:fec3:fec:1101:100:100:1:19    1.108 ms
+ 3  2001:504:1a::34:7                  4.934 ms
+ 4  2400:cb00:785:3::                  1.629 ms
+ 5  2400:cb00:29:1024::6ca2:f06a       1.421 ms
+```
+
+### Сравнение API endpoints
+
+| Endpoint | IP | Хопов | Latency | Провайдер |
+|----------|-----|-------|---------|-----------|
+| clob.polymarket.com | 104.18.34.205 | 5 | 0.9-1.6ms | Cloudflare |
+| gamma-api.polymarket.com | 104.18.34.205 | 5 | 1.5-2.9ms | Cloudflare |
+| polymarket.com | 76.76.21.21 | 8 | 0.3-0.5ms | Vercel (AWS) |
+
+### Маршрут пакетов
+
+```
+VPS Toronto (50.114.177.1)
+    │
+    ▼ (~1ms)
+ISP Gateway (100.71.1.254)
+    │
+    ▼ (~1ms)
+Toronto Internet Exchange - TorIX (206.108.34.7)
+    │
+    ▼ (~1-7ms)
+Cloudflare Edge (108.162.239.x)
+    │
+    ▼ (~1ms)
+Polymarket API (104.18.34.205 / 172.64.153.51)
+```
+
+### Выводы
+
+1. **5 хопов до Cloudflare** — минимальный маршрут
+2. **TorIX peering** — прямое соединение Toronto ↔ Cloudflare
+3. **IPv4 и IPv6 одинаковы** — оба маршрута через 5 хопов
+4. **clob и gamma-api** — один IP (104.18.34.205), один маршрут
+5. **polymarket.com** — другой хостинг (Vercel/AWS), 8 хопов
+6. **Latency < 2ms** — сетевая часть идеальна
+
+---
+
+*Тесты выполнены: 2025-12-04T12:15+0000*
