@@ -181,8 +181,9 @@ export class TradingService {
 
   /**
    * Post a pre-signed order
+   * Returns full API response for detailed logging
    */
-  async postSignedOrder(signedOrder: any, expirationTimestamp?: number): Promise<Order> {
+  async postSignedOrder(signedOrder: any, expirationTimestamp?: number): Promise<Order & { rawResponse?: any }> {
     if (!this.isInitialized || !this.client) {
       throw new Error('Trading service not initialized');
     }
@@ -199,11 +200,16 @@ export class TradingService {
     const firstResponse = Array.isArray(orderResponse) ? orderResponse[0] : orderResponse;
 
     if (firstResponse?.success === false || firstResponse?.errorMsg) {
-      throw new Error(firstResponse?.errorMsg || 'Order posting failed');
+      // Include full response in error for debugging
+      const error = new Error(firstResponse?.errorMsg || 'Order posting failed');
+      (error as any).rawResponse = firstResponse;
+      throw error;
     }
 
     if (!firstResponse?.orderID) {
-      throw new Error('No orderID returned');
+      const error = new Error('No orderID returned');
+      (error as any).rawResponse = firstResponse;
+      throw error;
     }
 
     return {
@@ -217,6 +223,7 @@ export class TradingService {
       status: 'OPEN',
       timestamp: new Date(),
       orderType: orderType === OrderType.GTD ? 'GTD' : 'GTC',
+      rawResponse: firstResponse,  // Include full response
     };
   }
 }

@@ -219,7 +219,57 @@ npm run build
 2. Убедитесь что подписка активна ("Subscribed to market_created")
 3. BTC updown маркеты создаются каждые 15 минут
 
+## Тестирование Latency
+
+### src/test-latency.ts
+
+Скрипт для измерения latency HTTP POST запросов к Polymarket CLOB API.
+
+**Логика работы:**
+1. Polling Gamma API до появления маркета
+2. Ждёт DELAY_BEFORE_SPAM_MS (19 сек)
+3. Pre-sign 1 ордер (UP @ 0.45, expiration = 1 сек до старта)
+4. Spam postSignedOrder() с 20 параллельными запросами
+5. Логирует каждый запрос в CSV файл
+6. Выводит статистику: min, max, avg, median
+
+**Запуск:**
+```bash
+npm run test-latency btc-updown-15m-1764930600
+```
+
+**CSV файл:** `latency.csv`
+```csv
+timestamp,slug,side,price,latency_ms,success,error
+```
+
+**Типичные значения latency:**
+- США (близко к серверам): ~250-300ms
+- Европа: ~400-500ms
+- Азия/далеко: ~600-800ms
+
+**Влияние на бота:**
+- Latency определяет сколько попыток бот успеет сделать
+- При 285ms за 6 сек = ~420 попыток
+- При 600ms за 6 сек = ~200 попыток (в 2 раза меньше!)
+
+### Компоненты latency
+
+```
+HTTP POST /order:
+├─ DNS резолв:           ~1ms   (кэшируется)
+├─ TCP/TLS handshake:    ~10ms  (keep-alive)
+├─ СЕРВЕР ОБРАБОТКА:   ~250ms   ← главный bottleneck
+│   ├─ Валидация подписи
+│   ├─ Проверка баланса
+│   ├─ Matching engine
+│   └─ Запись в БД
+└─ Ответ сервера:       ~20ms
+```
+
 ## История
 
+- **2025-12-04**: Добавлен test-latency.ts для измерения latency
+- **2025-12-03**: 10 ордеров с индивидуальными expiration times
 - **2025-11-25**: Создан проект, выделен из live-trade-PM
 - Репозиторий: https://github.com/Bezoutoff/Tuda_Suda_49

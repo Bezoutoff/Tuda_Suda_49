@@ -16,8 +16,9 @@ import * as path from 'path';
 import { TradingService } from './trading-service';
 import { tradingConfig, validateTradingConfig, BOT_CONFIG, getOrderSize } from './config';
 
-// Latency log file
+// Latency log files
 const LATENCY_LOG_FILE = path.join(__dirname, '..', 'latency.csv');
+const RESPONSE_LOG_FILE = path.join(__dirname, '..', 'api-responses.log');
 
 // Initialize latency log with header if not exists
 function initLatencyLog() {
@@ -32,6 +33,19 @@ function logLatency(slug: string, side: string, price: number, latencyMs: number
   const errorMsg = error ? `"${error.replace(/"/g, '""')}"` : '';
   const line = `${timestamp},${slug},${side},${price},${latencyMs},${success},${errorMsg}\n`;
   fs.appendFileSync(LATENCY_LOG_FILE, line);
+}
+
+// Log full API response to file
+function logApiResponse(slug: string, latencyMs: number, success: boolean, response: any) {
+  const timestamp = new Date().toISOString();
+  const entry = {
+    timestamp,
+    slug,
+    latencyMs,
+    success,
+    response: response || null,
+  };
+  fs.appendFileSync(RESPONSE_LOG_FILE, JSON.stringify(entry) + '\n');
 }
 
 // Test parameters
@@ -97,7 +111,8 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`=`.repeat(60));
   log(`LATENCY TEST: ${slug}`);
   log(`Market time: ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
-  log(`Latency log: ${LATENCY_LOG_FILE}`);
+  log(`Latency CSV: ${LATENCY_LOG_FILE}`);
+  log(`API responses: ${RESPONSE_LOG_FILE}`);
   log(`=`.repeat(60));
 
   // Validate config
@@ -193,16 +208,19 @@ async function runTest(slug: string, marketTimestamp: number) {
             const latency = Math.round(performance.now() - reqStart);
             latencies.push(latency);
             logLatency(slug, 'UP', TEST_PRICE, latency, true);
+            logApiResponse(slug, latency, true, result.rawResponse);
             if (!placed) {
               placed = true;
               orderId = result.orderId;
               log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${orderId}`);
+              log(`  Full response: ${JSON.stringify(result.rawResponse)}`);
             }
           })
           .catch(err => {
             const latency = Math.round(performance.now() - reqStart);
             latencies.push(latency);
             logLatency(slug, 'UP', TEST_PRICE, latency, false, err.message);
+            logApiResponse(slug, latency, false, err.rawResponse || { error: err.message });
           })
       );
     }
