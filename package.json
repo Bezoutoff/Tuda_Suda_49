@@ -10,7 +10,8 @@
     "test-order": "ts-node src/test-order.ts",
     "test-ws": "ts-node src/test-ws.ts",
     "bot-polling": "ts-node src/bot-polling.ts",
-    "bot-fast": "node dist/bot-polling.js"
+    "bot-fast": "node dist/bot-polling.js",
+    "test-latency": "ts-node src/test-latency.ts"
   },
   "repository": {
     "type": "git",
