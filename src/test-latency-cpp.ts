@@ -227,6 +227,37 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`Interval: ${cppConfig.intervalMs}ms`);
   log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
 
+  // Test: Make a manual HTTP request from Node.js to verify credentials
+  log('');
+  log('--- TEST: Manual HTTP request from Node.js ---');
+  const freshTimeResp = await fetch('https://clob.polymarket.com/time');
+  const freshTime = await freshTimeResp.text();
+  const manualMessage = freshTime + 'POST' + '/order' + orderBody;
+  const manualSignature = crypto
+    .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
+    .update(manualMessage)
+    .digest('base64');
+
+  try {
+    const testResp = await fetch('https://clob.polymarket.com/order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'POLY-ADDRESS': funder!,
+        'POLY-SIGNATURE': manualSignature,
+        'POLY-TIMESTAMP': freshTime,
+        'POLY-API-KEY': tradingConfig.apiKey!,
+        'POLY-PASSPHRASE': tradingConfig.passphrase!,
+      },
+      body: orderBody,
+    });
+    const testResult = await testResp.text();
+    log(`  Status: ${testResp.status}`);
+    log(`  Response: ${testResult.slice(0, 100)}...`);
+  } catch (err: any) {
+    log(`  Error: ${err.message}`);
+  }
+
   // ===== PHASE 4: Wait before spam =====
   log('');
   log(`--- PHASE 4: Waiting ${DELAY_BEFORE_SPAM_MS / 1000}s before spam ---`);
