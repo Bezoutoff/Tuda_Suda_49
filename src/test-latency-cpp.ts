@@ -179,12 +179,24 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('');
   log('--- PHASE 3: Preparing C++ config ---');
 
-  // Try passing signedOrder as-is (no transformation)
-  // Just add owner, orderType, deferExec like SDK does
+  // SDK's orderToJson transforms:
+  // 1. Adds owner (apiKey)
+  // 2. Adds deferExec (false)
+  // 3. Converts salt to integer
+  // 4. Uses numeric orderType (GTD=1)
+  // But keeps order fields as-is (expiration, nonce etc stay strings)
+
+  const transformedOrder = {
+    ...signedOrder,
+    salt: parseInt(signedOrder.salt, 10),  // only salt needs to be int
+  };
+
   const orderBody = JSON.stringify([
     {
-      order: signedOrder,
-      orderType: OrderType.GTD,
+      deferExec: false,
+      order: transformedOrder,
+      owner: tradingConfig.apiKey,
+      orderType: 1,  // GTD = 1 (numeric)
     },
   ]);
 
