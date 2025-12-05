@@ -1,10 +1,14 @@
 # Troubleshooting: C++ Latency Test - 401 Unauthorized
 
+## Статус: РЕШЕНО
+
+**Корневая причина:** Транзиентная проблема с `@polymarket/clob-client@4.22.8` где `useServerTime` отправлял `[object Object]` вместо timestamp строки. Решено переустановкой node_modules.
+
 ## Проблема
 
 C++ latency test (`npm run test-latency-cpp`) возвращает ошибку "Unauthorized/Invalid api key" при отправке ордеров на Polymarket CLOB API.
 
-TypeScript версия (`npm run test-latency`) работает корректно.
+TypeScript версия также показывала `POLY_TIMESTAMP: "[object Object]"` в логах.
 
 ## Что было проверено
 
@@ -99,9 +103,16 @@ npm run test-latency-cpp btc-updown-15m-<TIMESTAMP>
 # Добавить в C++: curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 ```
 
-## Следующие шаги
+## Решение
 
-1. Проверить результат ручного HTTP запроса из Node.js
-2. Если Node.js тоже 401 — проблема в формате запроса
-3. Если Node.js OK — сравнить raw HTTP запросы (tcpdump/wireshark)
-4. Попробовать CURLOPT_VERBOSE для детального лога
+Проблема была решена после:
+1. Переустановки node_modules (`npm install`)
+2. Верификации что `getServerTime()` корректно возвращает число
+3. Тестирования что POST запросы получают 400 (бизнес-ошибки) вместо 401 (auth ошибки)
+
+## Что помогло в диагностике
+
+1. Проверка точного содержимого POLY_TIMESTAMP в логах ошибок
+2. Тестирование `getOpenOrders()` для проверки валидности credentials
+3. Ручной HTTP запрос с правильными заголовками
+4. Сравнение header names (POLY_ADDRESS vs POLY-ADDRESS - правильно с underscore)

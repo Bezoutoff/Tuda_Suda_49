@@ -187,8 +187,16 @@ async function runTest(slug: string, marketTimestamp: number) {
     },
   ]);
 
-  // Get funder address
-  const funder = tradingConfig.funder || tradingConfig.privateKey;
+  // Get wallet address (signer) - this is what POLY_ADDRESS should be!
+  const { Wallet } = await import('ethers');
+  const pk = tradingConfig.privateKey.startsWith('0x')
+    ? tradingConfig.privateKey
+    : '0x' + tradingConfig.privateKey;
+  const wallet = new Wallet(pk);
+  const walletAddress = wallet.address;
+
+  log(`Wallet address: ${walletAddress}`);
+  log(`Funder address: ${tradingConfig.funder}`);
 
   // Debug: print expected signature for verification
   log('');
@@ -215,7 +223,7 @@ async function runTest(slug: string, marketTimestamp: number) {
     apiKey: tradingConfig.apiKey,
     secret: tradingConfig.secret,
     passphrase: tradingConfig.passphrase,
-    address: funder,
+    address: walletAddress,  // IMPORTANT: Use wallet address, not funder!
     maxAttempts: MAX_ATTEMPTS,
     intervalMs: INTERVAL_MS,
     // Pass the test timestamp for signature comparison
@@ -243,7 +251,7 @@ async function runTest(slug: string, marketTimestamp: number) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'POLY-ADDRESS': funder!,
+        'POLY-ADDRESS': walletAddress,  // Use wallet address!
         'POLY-SIGNATURE': manualSignature,
         'POLY-TIMESTAMP': freshTime,
         'POLY-API-KEY': tradingConfig.apiKey!,

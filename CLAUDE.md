@@ -267,36 +267,29 @@ HTTP POST /order:
 └─ Ответ сервера:       ~20ms
 ```
 
-## C++ Latency Test (WIP)
+## C++ Latency Test
 
-### Статус: 401 Unauthorized - В процессе отладки
+### Статус: Auth работает, готов к тестированию
 
-Попытка создать C++ версию latency теста для сравнения с TypeScript.
+C++ версия latency теста для сравнения с TypeScript.
 Цель: проверить, даст ли C++ на libcurl выигрыш в latency.
 
 ### Файлы
 - `src/cpp/test-latency.cpp` — C++ HTTP спам с libcurl + OpenSSL HMAC
 - `src/test-latency-cpp.ts` — Node.js обёртка (polling + pre-sign)
 - `build-cpp.sh` — скрипт компиляции для Ubuntu
-- `TROUBLESHOOTING_CPP_401.md` — детальное описание проблемы
+- `TROUBLESHOOTING_CPP_401.md` — история отладки 401 ошибки (РЕШЕНО)
 
 ### Что работает
 - HMAC-SHA256 подписи совпадают между Node.js и C++ (Match: YES)
 - URL-safe base64 decode (- вместо +, _ вместо /)
 - JSON парсинг credentials и body
 - Server time синхронизация
+- Аутентификация (POST запросы получают 400, не 401)
 
-### Что не работает
-- HTTP запросы возвращают 401 "Unauthorized/Invalid api key"
-- Несмотря на корректные подписи и заголовки
-
-### Следующие шаги для отладки
-1. Проверить результат ручного HTTP запроса из Node.js (уже добавлен тест)
-2. Если Node.js тоже 401 — проблема в формате запроса, не в C++
-3. Сравнить raw HTTP запросы через tcpdump/wireshark
-4. Попробовать CURLOPT_VERBOSE для детального лога curl
-5. Проверить HTTP версию (HTTP/1.1 vs HTTP/2)
-6. Проверить Content-Length и body encoding
+### Решённая проблема: [object Object]
+Была транзиентная проблема где `useServerTime` в @polymarket/clob-client отправлял
+`POLY_TIMESTAMP: "[object Object]"` вместо строки timestamp. Решено переустановкой node_modules.
 
 ### Команды
 ```bash
@@ -312,7 +305,7 @@ npm run test-latency-cpp btc-updown-15m-<TIMESTAMP>
 
 ## История
 
-- **2025-12-05**: C++ latency test — 401 Unauthorized (в процессе отладки)
+- **2025-12-05**: C++ latency test — 401 РЕШЕНО (была [object Object] в POLY_TIMESTAMP)
 - **2025-12-04**: Добавлен test-latency.ts для измерения latency
 - **2025-12-03**: 10 ордеров с индивидуальными expiration times
 - **2025-11-25**: Создан проект, выделен из live-trade-PM
