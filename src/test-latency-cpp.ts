@@ -201,12 +201,13 @@ async function runTest(slug: string, marketTimestamp: number) {
   // OrderType: GTC=0, GTD=1, FOK=2 (SDK uses numeric values)
   const ORDER_TYPE_GTD = 1;
 
+  // Match SDK's key order: deferExec, order, owner, orderType
   const orderBody = JSON.stringify([
     {
-      order: transformedOrder,
-      orderType: ORDER_TYPE_GTD,
-      owner: tradingConfig.apiKey,
       deferExec: false,
+      order: transformedOrder,
+      owner: tradingConfig.apiKey,
+      orderType: ORDER_TYPE_GTD,
     },
   ]);
 
