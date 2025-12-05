@@ -15,7 +15,7 @@ echo "Building C++ latency test..."
 mkdir -p dist
 
 # Compile with optimizations
-g++ -O3 -o dist/test-latency-cpp src/cpp/test-latency.cpp -lcurl
+g++ -O3 -o dist/test-latency-cpp src/cpp/test-latency.cpp -lcurl -lssl -lcrypto
 
 echo "Build complete: dist/test-latency-cpp"
 

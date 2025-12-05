@@ -5,7 +5,7 @@
  * 1. Polls for market (same as test-latency.ts)
  * 2. Pre-signs the order (EIP-712 in Node.js)
  * 3. Spawns C++ binary for HTTP spam
- * 4. Passes pre-signed order + headers via stdin
+ * 4. Passes credentials + order body via stdin
  *
  * Usage: npm run test-latency-cpp btc-updown-15m-1764929700
  */
@@ -18,8 +18,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { TradingService } from './trading-service';
 import { tradingConfig, validateTradingConfig, BOT_CONFIG, getOrderSize } from './config';
-import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
-import { Wallet } from 'ethers';
+import { OrderType } from '@polymarket/clob-client';
 
 // Latency log files
 const LATENCY_LOG_FILE = path.join(__dirname, '..', 'latency-cpp.csv');
@@ -91,34 +90,6 @@ async function fetchMarketBySlug(slug: string): Promise<{
   } catch {
     return null;
   }
-}
-
-/**
- * Create CLOB client for header generation
- */
-function createClobClient(): ClobClient {
-  const pk = tradingConfig.privateKey.startsWith('0x')
-    ? tradingConfig.privateKey
-    : '0x' + tradingConfig.privateKey;
-  const wallet = new Wallet(pk);
-  const funder = tradingConfig.funder || wallet.address;
-
-  const creds = {
-    key: tradingConfig.apiKey!,
-    secret: tradingConfig.secret!,
-    passphrase: tradingConfig.passphrase!,
-  };
-
-  return new ClobClient(
-    tradingConfig.clobApiUrl,
-    tradingConfig.chainId,
-    wallet,
-    creds,
-    tradingConfig.signatureType,
-    funder,
-    undefined,
-    true // useServerTime
-  );
 }
 
 /**
@@ -208,12 +179,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('');
   log('--- PHASE 3: Preparing C++ config ---');
 
-  // Create CLOB client for header generation
-  const clobClient = createClobClient();
-
-  // Get authentication headers
-  // We need to access the client's internal method for headers
-  // Since this is complex, we'll manually build the request body
+  // Build order body (same format as CLOB client)
   const orderBody = JSON.stringify([
     {
       order: signedOrder,
@@ -221,66 +187,28 @@ async function runTest(slug: string, marketTimestamp: number) {
     },
   ]);
 
-  // Build L2 headers manually
-  const pk = tradingConfig.privateKey.startsWith('0x')
-    ? tradingConfig.privateKey
-    : '0x' + tradingConfig.privateKey;
-  const wallet = new Wallet(pk);
-  const funder = tradingConfig.funder || wallet.address;
-
-  // Get current server time
-  const timeResponse = await fetch('https://clob.polymarket.com/time');
-  const serverTime = await timeResponse.text();
-
-  // Create L2 signature for POST /order
-  // The CLOB client signs: method + requestPath + body + timestamp
-  const method = 'POST';
-  const requestPath = '/order';
-
-  // HMAC signature using secret
-  const crypto = await import('crypto');
-  const message = serverTime + method + requestPath + orderBody;
-  const signature = crypto
-    .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
-    .update(message)
-    .digest('base64');
+  // Get funder address
+  const funder = tradingConfig.funder || tradingConfig.privateKey;
 
   const cppConfig = {
-    url: 'https://clob.polymarket.com/order',
     body: orderBody,
+    apiKey: tradingConfig.apiKey,
+    secret: tradingConfig.secret,
+    passphrase: tradingConfig.passphrase,
+    address: funder,
     maxAttempts: MAX_ATTEMPTS,
     intervalMs: INTERVAL_MS,
-    headers: {
-      'POLY-ADDRESS': funder,
-      'POLY-SIGNATURE': signature,
-      'POLY-TIMESTAMP': serverTime,
-      'POLY-API-KEY': tradingConfig.apiKey!,
-      'POLY-PASSPHRASE': tradingConfig.passphrase!,
-    },
   };
 
-  log(`URL: ${cppConfig.url}`);
   log(`Max attempts: ${cppConfig.maxAttempts}`);
   log(`Interval: ${cppConfig.intervalMs}ms`);
-  log(`Headers: ${Object.keys(cppConfig.headers).join(', ')}`);
+  log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
 
   // ===== PHASE 4: Wait before spam =====
   log('');
   log(`--- PHASE 4: Waiting ${DELAY_BEFORE_SPAM_MS / 1000}s before spam ---`);
 
   await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
-
-  // Update timestamp for fresh signature
-  const freshTimeResponse = await fetch('https://clob.polymarket.com/time');
-  const freshServerTime = await freshTimeResponse.text();
-  const freshMessage = freshServerTime + method + requestPath + orderBody;
-  const freshSignature = crypto
-    .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
-    .update(freshMessage)
-    .digest('base64');
-
-  cppConfig.headers['POLY-TIMESTAMP'] = freshServerTime;
-  cppConfig.headers['POLY-SIGNATURE'] = freshSignature;
 
   // ===== PHASE 5: Run C++ binary =====
   log('');
