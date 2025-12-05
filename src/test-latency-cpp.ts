@@ -180,12 +180,13 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('--- PHASE 3: Preparing C++ config ---');
 
   // Build order body (same format as CLOB client)
-  // SDK adds 'owner' field via orderToJson() - required for API validation
+  // SDK adds 'owner', 'deferExec' fields via orderToJson()
   const orderBody = JSON.stringify([
     {
       order: signedOrder,
       orderType: OrderType.GTD,
       owner: tradingConfig.apiKey,
+      deferExec: false,
     },
   ]);
 
