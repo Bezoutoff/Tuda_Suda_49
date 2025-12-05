@@ -184,11 +184,11 @@ async function runTest(slug: string, marketTimestamp: number) {
   await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
 
   // ===== PHASE 4: Spam orders =====
-  // Режим: непрерывный поток без пауз (0ms interval)
-  const SPAM_INTERVAL_MS = 0;  // БЕЗ паузы между запросами
+  // Режим: минимальная задержка между запросами
+  const SPAM_INTERVAL_MS = 0.1;  // 0.1ms между запросами
 
   log('');
-  log(`--- PHASE 4: Spamming orders (NO DELAY, continuous) ---`);
+  log(`--- PHASE 4: Spamming orders (${SPAM_INTERVAL_MS}ms interval) ---`);
 
   const spamStart = Date.now();
   let totalAttempts = 0;
