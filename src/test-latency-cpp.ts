@@ -170,7 +170,7 @@ async function runTest(slug: string, marketTimestamp: number) {
     size: getOrderSize(),
     outcome: 'YES',
     expirationTimestamp,
-    negRisk: false,
+    negRisk: true,  // BTC updown markets are negRisk
   });
   const signTime = Math.round(performance.now() - signStart);
   log(`Signing took: ${signTime}ms`);
@@ -205,7 +205,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   // Use current server time for comparison
   const timeResponse = await fetch('https://clob.polymarket.com/time');
   const serverTime = await timeResponse.text();
-  const testMessage = serverTime + 'POST' + '/order' + orderBody;
+  const testMessage = serverTime + 'POST' + '/orders' + orderBody;
   const testSignature = crypto
     .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
     .update(testMessage)
@@ -240,7 +240,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('--- TEST: Manual HTTP request from Node.js ---');
   const freshTimeResp = await fetch('https://clob.polymarket.com/time');
   const freshTime = await freshTimeResp.text();
-  const manualMessage = freshTime + 'POST' + '/order' + orderBody;
+  const manualMessage = freshTime + 'POST' + '/orders' + orderBody;
   let manualSignature = crypto
     .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
     .update(manualMessage)
@@ -249,7 +249,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   manualSignature = manualSignature.replace(/\+/g, '-').replace(/\//g, '_');
 
   try {
-    const testResp = await fetch('https://clob.polymarket.com/order', {
+    const testResp = await fetch('https://clob.polymarket.com/orders', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
