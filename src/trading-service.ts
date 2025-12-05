@@ -5,7 +5,49 @@
 
 import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { Wallet } from 'ethers';
+import * as https from 'https';
+import * as dns from 'dns';
 import { TradingConfig, CreateOrderRequest, Order } from './types';
+
+/**
+ * Hardcoded IP for clob.polymarket.com to bypass DNS lookup
+ * Cloudflare anycast IPs (from dig clob.polymarket.com)
+ */
+const CLOB_HARDCODED_IP = '104.18.34.205';
+
+/**
+ * Configure DNS bypass for faster connections
+ */
+function configureDnsBypass(): void {
+  try {
+    // Override DNS lookup for clob.polymarket.com
+    const originalLookup = dns.lookup;
+    (dns as any).lookup = function(hostname: string, options: any, callback: any) {
+      // Handle both (hostname, callback) and (hostname, options, callback) signatures
+      if (typeof options === 'function') {
+        callback = options;
+        options = {};
+      }
+
+      if (hostname === 'clob.polymarket.com') {
+        // Return hardcoded IP immediately
+        const family = options?.family || 4;
+        setImmediate(() => callback(null, CLOB_HARDCODED_IP, family));
+        return;
+      }
+
+      // For other hosts, use original lookup
+      return (originalLookup as any).call(dns, hostname, options, callback);
+    };
+
+    console.log(`DNS bypass configured: clob.polymarket.com → ${CLOB_HARDCODED_IP}`);
+  } catch (err) {
+    console.warn('Failed to configure DNS bypass:', err);
+  }
+}
+
+// Apply on module load
+configureDnsBypass();
 
 export class TradingService {
   private client!: ClobClient;
