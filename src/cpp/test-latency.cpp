@@ -123,6 +123,13 @@ std::string generateSignature(const std::string& secret, const std::string& mess
     // Encode to base64
     std::string signature = base64Encode(hash, hashLen);
 
+    // Convert to URL-safe base64 (required by Polymarket)
+    // '+' -> '-', '/' -> '_'
+    for (char& c : signature) {
+        if (c == '+') c = '-';
+        else if (c == '/') c = '_';
+    }
+
     if (debug) {
         std::cerr << "  signature: " << signature << std::endl;
     }

@@ -241,18 +241,20 @@ async function runTest(slug: string, marketTimestamp: number) {
   const freshTimeResp = await fetch('https://clob.polymarket.com/time');
   const freshTime = await freshTimeResp.text();
   const manualMessage = freshTime + 'POST' + '/order' + orderBody;
-  const manualSignature = crypto
+  let manualSignature = crypto
     .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
     .update(manualMessage)
     .digest('base64');
+  // Convert to URL-safe base64: + -> -, / -> _
+  manualSignature = manualSignature.replace(/\+/g, '-').replace(/\//g, '_');
 
   try {
     const testResp = await fetch('https://clob.polymarket.com/order', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'POLY_ADDRESS': walletAddress,  // UNDERSCORE not hyphen!
-        'POLY_SIGNATURE': manualSignature,
+        'POLY_ADDRESS': walletAddress,
+        'POLY_SIGNATURE': manualSignature,  // URL-safe base64
         'POLY_TIMESTAMP': freshTime,
         'POLY_API_KEY': tradingConfig.apiKey!,
         'POLY_PASSPHRASE': tradingConfig.passphrase!,
