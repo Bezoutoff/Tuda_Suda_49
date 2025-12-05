@@ -180,10 +180,27 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('--- PHASE 3: Preparing C++ config ---');
 
   // Build order body (same format as CLOB client)
-  // SDK adds 'owner', 'deferExec' fields via orderToJson()
+  // SDK's orderToJson() transforms fields and adds owner/deferExec
+  // Critical: salt must be integer, not string!
+  const transformedOrder = {
+    salt: parseInt(signedOrder.salt, 10),
+    maker: signedOrder.maker,
+    signer: signedOrder.signer,
+    taker: signedOrder.taker,
+    tokenId: signedOrder.tokenId,
+    makerAmount: signedOrder.makerAmount,
+    takerAmount: signedOrder.takerAmount,
+    side: signedOrder.side,
+    expiration: signedOrder.expiration,
+    nonce: signedOrder.nonce,
+    feeRateBps: signedOrder.feeRateBps,
+    signatureType: signedOrder.signatureType,
+    signature: signedOrder.signature,
+  };
+
   const orderBody = JSON.stringify([
     {
-      order: signedOrder,
+      order: transformedOrder,
       orderType: OrderType.GTD,
       owner: tradingConfig.apiKey,
       deferExec: false,
