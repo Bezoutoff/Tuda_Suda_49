@@ -41,31 +41,38 @@ static size_t writeCallback(void* contents, size_t size, size_t nmemb, void* use
     return totalSize;
 }
 
-// Base64 decode using EVP (more reliable)
+// Base64 decode - simple table-based implementation
 std::string base64Decode(const std::string& input) {
-    // Calculate max decoded length
-    size_t maxLen = (input.length() * 3) / 4 + 1;
-    std::string output(maxLen, '\0');
+    static const std::string base64_chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-    EVP_ENCODE_CTX* ctx = EVP_ENCODE_CTX_new();
-    EVP_DecodeInit(ctx);
+    auto indexOf = [&](char c) -> int {
+        if (c == '=') return -1;
+        size_t pos = base64_chars.find(c);
+        return (pos != std::string::npos) ? (int)pos : -2;
+    };
 
-    int outLen = 0;
-    int tmpLen = 0;
+    std::string output;
+    output.reserve((input.length() * 3) / 4);
 
-    if (EVP_DecodeUpdate(ctx, reinterpret_cast<unsigned char*>(&output[0]), &outLen,
-                         reinterpret_cast<const unsigned char*>(input.data()), input.length()) < 0) {
-        EVP_ENCODE_CTX_free(ctx);
-        return "";
+    int val = 0;
+    int bits = 0;
+
+    for (char c : input) {
+        if (c == '=' || c == '\n' || c == '\r' || c == ' ') continue;
+
+        int idx = indexOf(c);
+        if (idx < 0) continue;  // Skip invalid chars
+
+        val = (val << 6) | idx;
+        bits += 6;
+
+        if (bits >= 8) {
+            bits -= 8;
+            output.push_back(static_cast<char>((val >> bits) & 0xFF));
+        }
     }
 
-    if (EVP_DecodeFinal(ctx, reinterpret_cast<unsigned char*>(&output[0]) + outLen, &tmpLen) < 0) {
-        EVP_ENCODE_CTX_free(ctx);
-        return "";
-    }
-
-    EVP_ENCODE_CTX_free(ctx);
-    output.resize(outLen + tmpLen);
     return output;
 }
 
@@ -285,6 +292,11 @@ int main() {
     std::string address = extractJsonString(inputJson, "address");
     int maxAttempts = extractJsonInt(inputJson, "maxAttempts", DEFAULT_MAX_ATTEMPTS);
     int intervalMs = extractJsonInt(inputJson, "intervalMs", DEFAULT_INTERVAL_MS);
+
+    // Debug: print raw extracted values
+    std::cerr << "DEBUG JSON PARSING:" << std::endl;
+    std::cerr << "  secret raw: [" << secret << "]" << std::endl;
+    std::cerr << "  secret length: " << secret.length() << std::endl;
 
     if (body.empty() || apiKey.empty() || secret.empty() || passphrase.empty() || address.empty()) {
         std::cerr << "ERROR: Missing required config fields" << std::endl;
