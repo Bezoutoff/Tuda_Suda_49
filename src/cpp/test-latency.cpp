@@ -26,7 +26,7 @@
 const int DEFAULT_MAX_ATTEMPTS = 1000;
 const int DEFAULT_INTERVAL_MS = 2;
 const char* CLOB_URL = "https://clob.polymarket.com";
-const char* ORDER_PATH = "/order";
+const char* ORDER_PATH = "/orders";  // Use /orders for array body [{...}]
 
 // Response buffer
 struct ResponseBuffer {
