@@ -300,6 +300,8 @@ int main() {
     std::cerr << "DEBUG JSON PARSING:" << std::endl;
     std::cerr << "  secret raw: [" << secret << "]" << std::endl;
     std::cerr << "  secret length: " << secret.length() << std::endl;
+    std::cerr << "  body (first 50): " << body.substr(0, 50) << "..." << std::endl;
+    std::cerr << "  body length: " << body.length() << std::endl;
 
     if (body.empty() || apiKey.empty() || secret.empty() || passphrase.empty() || address.empty()) {
         std::cerr << "ERROR: Missing required config fields" << std::endl;

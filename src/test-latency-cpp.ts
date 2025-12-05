@@ -208,15 +208,19 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('');
   log('--- DEBUG: Expected HMAC signature ---');
   const crypto = await import('crypto');
-  const testTimestamp = '1764935981';  // Example timestamp
-  const testMessage = testTimestamp + 'POST' + '/order' + orderBody;
+  // Use current server time for comparison
+  const timeResponse = await fetch('https://clob.polymarket.com/time');
+  const serverTime = await timeResponse.text();
+  const testMessage = serverTime + 'POST' + '/order' + orderBody;
   const testSignature = crypto
     .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
     .update(testMessage)
     .digest('base64');
   log(`  Secret (first 8): ${tradingConfig.secret?.slice(0, 8)}...`);
   log(`  Secret length: ${tradingConfig.secret?.length}`);
-  log(`  Message (first 50): ${testMessage.slice(0, 50)}...`);
+  log(`  Server time: ${serverTime}`);
+  log(`  Body (first 50): ${orderBody.slice(0, 50)}...`);
+  log(`  Body length: ${orderBody.length}`);
   log(`  Message length: ${testMessage.length}`);
   log(`  Expected signature: ${testSignature}`);
 
