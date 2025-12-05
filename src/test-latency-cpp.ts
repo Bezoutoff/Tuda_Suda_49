@@ -238,6 +238,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`  Server time: ${serverTime}`);
   log(`  Body (first 50): ${orderBody.slice(0, 50)}...`);
   log(`  Body length: ${orderBody.length}`);
+  log(`  Full body: ${orderBody}`);
   log(`  Message length: ${testMessage.length}`);
   log(`  Expected signature: ${testSignature}`);
 
