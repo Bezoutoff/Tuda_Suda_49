@@ -182,6 +182,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   // Build order body (same format as CLOB client)
   // SDK's orderToJson() transforms fields and adds owner/deferExec
   // Critical: salt must be integer, not string!
+  // SDK's orderToJson: only salt is converted to int, rest passed as-is
   const transformedOrder = {
     salt: parseInt(signedOrder.salt, 10),
     maker: signedOrder.maker,
@@ -191,9 +192,9 @@ async function runTest(slug: string, marketTimestamp: number) {
     makerAmount: signedOrder.makerAmount,
     takerAmount: signedOrder.takerAmount,
     side: signedOrder.side,
-    expiration: parseInt(signedOrder.expiration, 10),  // string → number
-    nonce: parseInt(signedOrder.nonce, 10),            // string → number
-    feeRateBps: parseInt(signedOrder.feeRateBps, 10),  // string → number
+    expiration: signedOrder.expiration,    // keep as string
+    nonce: signedOrder.nonce,              // keep as string
+    feeRateBps: signedOrder.feeRateBps,    // keep as string
     signatureType: signedOrder.signatureType,
     signature: signedOrder.signature,
   };
