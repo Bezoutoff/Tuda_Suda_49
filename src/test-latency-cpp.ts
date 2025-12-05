@@ -235,16 +235,8 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`Interval: ${cppConfig.intervalMs}ms`);
   log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
 
-  // Test: Use SDK to verify order is valid (same as test-latency.ts)
-  log('');
-  log('--- TEST: SDK postSignedOrder (same as test-latency.ts) ---');
-  try {
-    const sdkResult = await tradingService.postSignedOrder(signedOrder, expirationTimestamp);
-    log(`  SUCCESS! Order ID: ${sdkResult.orderId}`);
-    log(`  Raw response: ${JSON.stringify(sdkResult.rawResponse).slice(0, 100)}...`);
-  } catch (err: any) {
-    log(`  FAILED: ${err.message}`);
-  }
+  // SDK test removed - it was consuming the order before C++ could use it
+  // Diagnosis complete: order is valid, C++ signature matches Node.js
 
   // ===== PHASE 4: Wait before spam =====
   log('');
