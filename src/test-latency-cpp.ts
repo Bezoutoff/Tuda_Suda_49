@@ -170,7 +170,7 @@ async function runTest(slug: string, marketTimestamp: number) {
     size: getOrderSize(),
     outcome: 'YES',
     expirationTimestamp,
-    negRisk: true,  // BTC updown markets are negRisk
+    negRisk: false,  // Same as test-latency.ts
   });
   const signTime = Math.round(performance.now() - signStart);
   log(`Signing took: ${signTime}ms`);
@@ -235,37 +235,15 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`Interval: ${cppConfig.intervalMs}ms`);
   log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
 
-  // Test: Make a manual HTTP request from Node.js to verify credentials
+  // Test: Use SDK to verify order is valid (same as test-latency.ts)
   log('');
-  log('--- TEST: Manual HTTP request from Node.js ---');
-  const freshTimeResp = await fetch('https://clob.polymarket.com/time');
-  const freshTime = await freshTimeResp.text();
-  const manualMessage = freshTime + 'POST' + '/orders' + orderBody;
-  let manualSignature = crypto
-    .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
-    .update(manualMessage)
-    .digest('base64');
-  // Convert to URL-safe base64: + -> -, / -> _
-  manualSignature = manualSignature.replace(/\+/g, '-').replace(/\//g, '_');
-
+  log('--- TEST: SDK postSignedOrder (same as test-latency.ts) ---');
   try {
-    const testResp = await fetch('https://clob.polymarket.com/orders', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'POLY_ADDRESS': walletAddress,
-        'POLY_SIGNATURE': manualSignature,  // URL-safe base64
-        'POLY_TIMESTAMP': freshTime,
-        'POLY_API_KEY': tradingConfig.apiKey!,
-        'POLY_PASSPHRASE': tradingConfig.passphrase!,
-      },
-      body: orderBody,
-    });
-    const testResult = await testResp.text();
-    log(`  Status: ${testResp.status}`);
-    log(`  Response: ${testResult.slice(0, 100)}...`);
+    const sdkResult = await tradingService.postSignedOrder(signedOrder, expirationTimestamp);
+    log(`  SUCCESS! Order ID: ${sdkResult.id}`);
+    log(`  Raw response: ${JSON.stringify(sdkResult.rawResponse).slice(0, 100)}...`);
   } catch (err: any) {
-    log(`  Error: ${err.message}`);
+    log(`  FAILED: ${err.message}`);
   }
 
   // ===== PHASE 4: Wait before spam =====
