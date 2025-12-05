@@ -191,9 +191,9 @@ async function runTest(slug: string, marketTimestamp: number) {
     makerAmount: signedOrder.makerAmount,
     takerAmount: signedOrder.takerAmount,
     side: signedOrder.side,
-    expiration: signedOrder.expiration,
-    nonce: signedOrder.nonce,
-    feeRateBps: signedOrder.feeRateBps,
+    expiration: parseInt(signedOrder.expiration, 10),  // string → number
+    nonce: parseInt(signedOrder.nonce, 10),            // string → number
+    feeRateBps: parseInt(signedOrder.feeRateBps, 10),  // string → number
     signatureType: signedOrder.signatureType,
     signature: signedOrder.signature,
   };
