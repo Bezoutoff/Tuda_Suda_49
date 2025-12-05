@@ -156,14 +156,9 @@ async function runTest(slug: string, marketTimestamp: number) {
     }
   }
 
-  // ===== PHASE 2: Wait before spam =====
+  // ===== PHASE 2: Pre-sign order =====
   log('');
-  log(`--- PHASE 2: Waiting ${DELAY_BEFORE_SPAM_MS / 1000}s before spam ---`);
-  await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
-
-  // ===== PHASE 3: Pre-sign order =====
-  log('');
-  log('--- PHASE 3: Pre-signing order ---');
+  log('--- PHASE 2: Pre-signing order ---');
   log(`Order: UP @ ${TEST_PRICE}`);
   log(`Size: ${getOrderSize()} USDC`);
 
@@ -182,6 +177,11 @@ async function runTest(slug: string, marketTimestamp: number) {
   });
   const signTime = Math.round(performance.now() - signStart);
   log(`Signing took: ${signTime}ms`);
+
+  // ===== PHASE 3: Wait before spam =====
+  log('');
+  log(`--- PHASE 3: Waiting ${DELAY_BEFORE_SPAM_MS / 1000}s before spam ---`);
+  await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
 
   // ===== PHASE 4: Spam orders =====
   // Режим: непрерывный поток без пауз (0ms interval)

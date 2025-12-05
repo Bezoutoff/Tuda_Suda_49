@@ -154,6 +154,13 @@ async function spamOrdersUntilSuccess(
     return false;
   }
 
+  // DELAY: ждём перед началом спама (после pre-sign)
+  const delayMs = BOT_CONFIG.DELAY_BEFORE_SPAM_MS;
+  if (delayMs > 0) {
+    log(`Waiting ${delayMs / 1000}s before spam...`);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+
   // SPAM: все 10 ордеров параллельно, пока все не пройдут
   const startTime = Date.now();
   let totalAttempts = 0;
@@ -251,13 +258,7 @@ async function pollAndPlaceOrders(
       log(`  YES Token: ${market.yesTokenId.slice(0, 20)}...`);
       log(`  NO Token: ${market.noTokenId.slice(0, 20)}...`);
 
-      // Wait before starting spam (market needs ~25s to become active)
-      if (BOT_CONFIG.DELAY_BEFORE_SPAM_MS > 0) {
-        log(`Waiting ${BOT_CONFIG.DELAY_BEFORE_SPAM_MS / 1000}s before starting order spam...`);
-        await new Promise(resolve => setTimeout(resolve, BOT_CONFIG.DELAY_BEFORE_SPAM_MS));
-      }
-
-      // Place orders (spam until success)
+      // Pre-sign and spam orders (delay is AFTER pre-sign now)
       return await spamOrdersUntilSuccess(
         tradingService,
         market.yesTokenId,
