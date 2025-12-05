@@ -179,38 +179,16 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('');
   log('--- PHASE 3: Preparing C++ config ---');
 
-  // Build order body (same format as CLOB client)
-  // SDK's orderToJson() transforms fields and adds owner/deferExec
-  // Critical: salt must be integer, not string!
-  // SDK's orderToJson: only salt is converted to int, rest passed as-is
-  const transformedOrder = {
-    salt: parseInt(signedOrder.salt, 10),
-    maker: signedOrder.maker,
-    signer: signedOrder.signer,
-    taker: signedOrder.taker,
-    tokenId: signedOrder.tokenId,
-    makerAmount: signedOrder.makerAmount,
-    takerAmount: signedOrder.takerAmount,
-    side: signedOrder.side,
-    expiration: signedOrder.expiration,    // keep as string
-    nonce: signedOrder.nonce,              // keep as string
-    feeRateBps: signedOrder.feeRateBps,    // keep as string
-    signatureType: signedOrder.signatureType,
-    signature: signedOrder.signature,
-  };
-
-  // OrderType: GTC=0, GTD=1, FOK=2 (SDK uses numeric values)
-  const ORDER_TYPE_GTD = 1;
-
-  // Match SDK's key order: deferExec, order, owner, orderType
+  // Try passing signedOrder as-is (no transformation)
+  // Just add owner, orderType, deferExec like SDK does
   const orderBody = JSON.stringify([
     {
-      deferExec: false,
-      order: transformedOrder,
-      owner: tradingConfig.apiKey,
-      orderType: ORDER_TYPE_GTD,
+      order: signedOrder,
+      orderType: OrderType.GTD,
     },
   ]);
+
+  log(`  signedOrder keys: ${Object.keys(signedOrder).join(', ')}`);
 
   // Get wallet address (signer) - this is what POLY_ADDRESS should be!
   const { Wallet } = await import('ethers');
