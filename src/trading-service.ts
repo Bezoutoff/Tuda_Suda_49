@@ -5,7 +5,38 @@
 
 import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { Wallet } from 'ethers';
+import * as https from 'https';
 import { TradingConfig, CreateOrderRequest, Order } from './types';
+
+/**
+ * Configure global HTTPS agent with TCP_NODELAY
+ * Disables Nagle's algorithm for lower latency
+ */
+function configureHttpsAgent(): void {
+  const agent = new https.Agent({
+    keepAlive: true,
+    keepAliveMsecs: 1000,
+    maxSockets: 100,
+    maxFreeSockets: 10,
+  });
+
+  // Patch createConnection to enable TCP_NODELAY on socket
+  const originalCreateConnection = (agent as any).createConnection;
+  (agent as any).createConnection = function(options: any, callback: any) {
+    const socket = originalCreateConnection.call(this, options, callback);
+    if (socket && typeof socket.setNoDelay === 'function') {
+      socket.setNoDelay(true);  // Disable Nagle's algorithm
+    }
+    return socket;
+  };
+
+  // Set as global agent
+  (https as any).globalAgent = agent;
+  console.log('HTTPS agent configured with TCP_NODELAY');
+}
+
+// Apply on module load
+configureHttpsAgent();
 
 export class TradingService {
   private client!: ClobClient;
