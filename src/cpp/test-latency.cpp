@@ -79,9 +79,18 @@ std::string base64Encode(const unsigned char* input, int length) {
 }
 
 // Generate HMAC-SHA256 signature
-std::string generateSignature(const std::string& secret, const std::string& message) {
+std::string generateSignature(const std::string& secret, const std::string& message, bool debug = false) {
     // Decode base64 secret
     std::string decodedSecret = base64Decode(secret);
+
+    if (debug) {
+        std::cerr << "DEBUG HMAC:" << std::endl;
+        std::cerr << "  secret (first 8): " << secret.substr(0, 8) << "..." << std::endl;
+        std::cerr << "  secret length: " << secret.length() << std::endl;
+        std::cerr << "  decoded secret length: " << decodedSecret.length() << std::endl;
+        std::cerr << "  message: " << message.substr(0, 50) << "..." << std::endl;
+        std::cerr << "  message length: " << message.length() << std::endl;
+    }
 
     // Generate HMAC
     unsigned char hash[EVP_MAX_MD_SIZE];
@@ -93,7 +102,13 @@ std::string generateSignature(const std::string& secret, const std::string& mess
          hash, &hashLen);
 
     // Encode to base64
-    return base64Encode(hash, hashLen);
+    std::string signature = base64Encode(hash, hashLen);
+
+    if (debug) {
+        std::cerr << "  signature: " << signature << std::endl;
+    }
+
+    return signature;
 }
 
 // Simple JSON value extractor
@@ -207,13 +222,14 @@ std::string fetchServerTime(CURL* curl) {
 CURLcode postOrder(CURL* curl, const std::string& body,
                    const std::string& apiKey, const std::string& secret,
                    const std::string& passphrase, const std::string& address,
-                   const std::string& timestamp, ResponseBuffer& response) {
+                   const std::string& timestamp, ResponseBuffer& response,
+                   bool debug = false) {
 
     std::string orderUrl = std::string(CLOB_URL) + ORDER_PATH;
 
     // Generate signature: timestamp + method + path + body
     std::string message = timestamp + "POST" + ORDER_PATH + body;
-    std::string signature = generateSignature(secret, message);
+    std::string signature = generateSignature(secret, message, debug);
 
     // Set URL
     curl_easy_setopt(curl, CURLOPT_URL, orderUrl.c_str());
@@ -330,8 +346,9 @@ int main() {
         }
 
         ResponseBuffer responseBuf;
+        bool debugFirst = (attempts == 1);  // Debug first request
         auto start = std::chrono::high_resolution_clock::now();
-        CURLcode res = postOrder(curl, body, apiKey, secret, passphrase, address, serverTime, responseBuf);
+        CURLcode res = postOrder(curl, body, apiKey, secret, passphrase, address, serverTime, responseBuf, debugFirst);
         auto end = std::chrono::high_resolution_clock::now();
 
         auto latencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();

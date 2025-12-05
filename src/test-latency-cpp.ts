@@ -204,6 +204,22 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`Interval: ${cppConfig.intervalMs}ms`);
   log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
 
+  // Debug: print expected signature for verification
+  log('');
+  log('--- DEBUG: Expected HMAC signature ---');
+  const crypto = await import('crypto');
+  const testTimestamp = '1764935981';  // Example timestamp
+  const testMessage = testTimestamp + 'POST' + '/order' + orderBody;
+  const testSignature = crypto
+    .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
+    .update(testMessage)
+    .digest('base64');
+  log(`  Secret (first 8): ${tradingConfig.secret?.slice(0, 8)}...`);
+  log(`  Secret length: ${tradingConfig.secret?.length}`);
+  log(`  Message (first 50): ${testMessage.slice(0, 50)}...`);
+  log(`  Message length: ${testMessage.length}`);
+  log(`  Expected signature: ${testSignature}`);
+
   // ===== PHASE 4: Wait before spam =====
   log('');
   log(`--- PHASE 4: Waiting ${DELAY_BEFORE_SPAM_MS / 1000}s before spam ---`);
