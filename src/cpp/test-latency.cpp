@@ -252,11 +252,11 @@ CURLcode postOrder(CURL* curl, const std::string& body,
 
     if (debug) {
         std::cerr << "DEBUG HEADERS:" << std::endl;
-        std::cerr << "  POLY-ADDRESS: " << address << std::endl;
-        std::cerr << "  POLY-TIMESTAMP: " << timestamp << std::endl;
-        std::cerr << "  POLY-API-KEY: " << apiKey << std::endl;
-        std::cerr << "  POLY-PASSPHRASE: " << passphrase << std::endl;
-        std::cerr << "  POLY-SIGNATURE: " << signature << std::endl;
+        std::cerr << "  POLY_ADDRESS: " << address << std::endl;
+        std::cerr << "  POLY_TIMESTAMP: " << timestamp << std::endl;
+        std::cerr << "  POLY_API_KEY: " << apiKey << std::endl;
+        std::cerr << "  POLY_PASSPHRASE: " << passphrase << std::endl;
+        std::cerr << "  POLY_SIGNATURE: " << signature << std::endl;
     }
 
     // Set URL
@@ -270,11 +270,11 @@ CURLcode postOrder(CURL* curl, const std::string& body,
     // Build headers
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    headers = curl_slist_append(headers, ("POLY-ADDRESS: " + address).c_str());
-    headers = curl_slist_append(headers, ("POLY-SIGNATURE: " + signature).c_str());
-    headers = curl_slist_append(headers, ("POLY-TIMESTAMP: " + timestamp).c_str());
-    headers = curl_slist_append(headers, ("POLY-API-KEY: " + apiKey).c_str());
-    headers = curl_slist_append(headers, ("POLY-PASSPHRASE: " + passphrase).c_str());
+    headers = curl_slist_append(headers, ("POLY_ADDRESS: " + address).c_str());
+    headers = curl_slist_append(headers, ("POLY_SIGNATURE: " + signature).c_str());
+    headers = curl_slist_append(headers, ("POLY_TIMESTAMP: " + timestamp).c_str());
+    headers = curl_slist_append(headers, ("POLY_API_KEY: " + apiKey).c_str());
+    headers = curl_slist_append(headers, ("POLY_PASSPHRASE: " + passphrase).c_str());
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);

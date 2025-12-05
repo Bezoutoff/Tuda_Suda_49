@@ -251,11 +251,11 @@ async function runTest(slug: string, marketTimestamp: number) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'POLY-ADDRESS': walletAddress,  // Use wallet address!
-        'POLY-SIGNATURE': manualSignature,
-        'POLY-TIMESTAMP': freshTime,
-        'POLY-API-KEY': tradingConfig.apiKey!,
-        'POLY-PASSPHRASE': tradingConfig.passphrase!,
+        'POLY_ADDRESS': walletAddress,  // UNDERSCORE not hyphen!
+        'POLY_SIGNATURE': manualSignature,
+        'POLY_TIMESTAMP': freshTime,
+        'POLY_API_KEY': tradingConfig.apiKey!,
+        'POLY_PASSPHRASE': tradingConfig.passphrase!,
       },
       body: orderBody,
     });
