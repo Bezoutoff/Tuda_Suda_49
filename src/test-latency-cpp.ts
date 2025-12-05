@@ -183,12 +183,14 @@ async function runTest(slug: string, marketTimestamp: number) {
   // 1. Adds owner (apiKey)
   // 2. Adds deferExec (false)
   // 3. Converts salt to integer
-  // 4. Uses numeric orderType (GTD=1)
-  // But keeps order fields as-is (expiration, nonce etc stay strings)
+  // 4. Converts side from number (0/1) to string ("BUY"/"SELL")
+  // 5. Uses string orderType ("GTD", not 1)
+  // But keeps expiration, nonce, feeRateBps as strings
 
   const transformedOrder = {
     ...signedOrder,
-    salt: parseInt(signedOrder.salt, 10),  // only salt needs to be int
+    salt: parseInt(signedOrder.salt, 10),
+    side: signedOrder.side === 0 ? 'BUY' : 'SELL',  // 0 = BUY, 1 = SELL
   };
 
   const orderBody = JSON.stringify([
@@ -196,7 +198,7 @@ async function runTest(slug: string, marketTimestamp: number) {
       deferExec: false,
       order: transformedOrder,
       owner: tradingConfig.apiKey,
-      orderType: 1,  // GTD = 1 (numeric)
+      orderType: 'GTD',  // String, not numeric!
     },
   ]);
 
