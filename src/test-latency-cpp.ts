@@ -235,8 +235,47 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`Interval: ${cppConfig.intervalMs}ms`);
   log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
 
-  // SDK test removed - it was consuming the order before C++ could use it
-  // Diagnosis complete: order is valid, C++ signature matches Node.js
+  // Test: Raw HTTP request from Node.js (same as C++ would do)
+  log('');
+  log('--- TEST: Raw HTTP from Node.js (same as C++) ---');
+  const freshTimeResp = await fetch('https://clob.polymarket.com/time');
+  const freshTime = await freshTimeResp.text();
+  const rawMessage = freshTime + 'POST' + '/orders' + orderBody;
+  let rawSignature = crypto
+    .createHmac('sha256', Buffer.from(tradingConfig.secret!, 'base64'))
+    .update(rawMessage)
+    .digest('base64');
+  // Convert to URL-safe base64 (same as C++)
+  rawSignature = rawSignature.replace(/\+/g, '-').replace(/\//g, '_');
+
+  log(`  Timestamp: ${freshTime}`);
+  log(`  Signature: ${rawSignature}`);
+
+  try {
+    const rawResp = await fetch('https://clob.polymarket.com/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'POLY_ADDRESS': walletAddress,
+        'POLY_SIGNATURE': rawSignature,
+        'POLY_TIMESTAMP': freshTime,
+        'POLY_API_KEY': tradingConfig.apiKey!,
+        'POLY_PASSPHRASE': tradingConfig.passphrase!,
+      },
+      body: orderBody,
+    });
+    const rawResult = await rawResp.text();
+    log(`  Status: ${rawResp.status}`);
+    log(`  Response: ${rawResult.slice(0, 200)}`);
+
+    if (rawResp.status === 200) {
+      log('  >>> Raw HTTP works! Order placed.');
+      // Order was placed, exit - don't run C++
+      process.exit(0);
+    }
+  } catch (err: any) {
+    log(`  Error: ${err.message}`);
+  }
 
   // ===== PHASE 4: Wait before spam =====
   log('');
