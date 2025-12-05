@@ -198,10 +198,13 @@ async function runTest(slug: string, marketTimestamp: number) {
     signature: signedOrder.signature,
   };
 
+  // OrderType: GTC=0, GTD=1, FOK=2 (SDK uses numeric values)
+  const ORDER_TYPE_GTD = 1;
+
   const orderBody = JSON.stringify([
     {
       order: transformedOrder,
-      orderType: OrderType.GTD,
+      orderType: ORDER_TYPE_GTD,
       owner: tradingConfig.apiKey,
       deferExec: false,
     },
