@@ -5,39 +5,7 @@
 
 import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { Wallet } from 'ethers';
-import * as https from 'https';
 import { TradingConfig, CreateOrderRequest, Order } from './types';
-
-/**
- * Configure global HTTPS agent with TCP_NODELAY
- * Disables Nagle's algorithm for lower latency
- *
- * Note: In newer Node.js versions, globalAgent is read-only.
- * We patch the existing globalAgent's createConnection instead.
- */
-function configureHttpsAgent(): void {
-  try {
-    const agent = https.globalAgent;
-
-    // Patch createConnection to enable TCP_NODELAY on socket
-    const originalCreateConnection = (agent as any).createConnection;
-    if (originalCreateConnection) {
-      (agent as any).createConnection = function(options: any, callback: any) {
-        const socket = originalCreateConnection.call(this, options, callback);
-        if (socket && typeof socket.setNoDelay === 'function') {
-          socket.setNoDelay(true);  // Disable Nagle's algorithm
-        }
-        return socket;
-      };
-      console.log('HTTPS agent patched with TCP_NODELAY');
-    }
-  } catch (err) {
-    console.warn('Failed to configure TCP_NODELAY:', err);
-  }
-}
-
-// Apply on module load
-configureHttpsAgent();
 
 export class TradingService {
   private client!: ClobClient;
