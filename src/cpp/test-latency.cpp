@@ -250,6 +250,15 @@ CURLcode postOrder(CURL* curl, const std::string& body,
     std::string message = timestamp + "POST" + ORDER_PATH + body;
     std::string signature = generateSignature(secret, message, debug);
 
+    if (debug) {
+        std::cerr << "DEBUG HEADERS:" << std::endl;
+        std::cerr << "  POLY-ADDRESS: " << address << std::endl;
+        std::cerr << "  POLY-TIMESTAMP: " << timestamp << std::endl;
+        std::cerr << "  POLY-API-KEY: " << apiKey << std::endl;
+        std::cerr << "  POLY-PASSPHRASE: " << passphrase << std::endl;
+        std::cerr << "  POLY-SIGNATURE: " << signature << std::endl;
+    }
+
     // Set URL
     curl_easy_setopt(curl, CURLOPT_URL, orderUrl.c_str());
 
