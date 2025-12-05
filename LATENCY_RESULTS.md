@@ -440,4 +440,134 @@ Stream (стало):  req→1ms→req→1ms→req→1ms→req→1ms→...
 
 ---
 
-*Тест выполнен: 2025-12-04T12:32+0000*
+## 8. Попытка DNS Bypass (Hardcoded IP) — НЕ РАБОТАЕТ
+
+### Идея
+
+Обойти DNS lookup при каждом запросе, используя hardcoded IP:
+
+```typescript
+// Вместо DNS резолва каждый раз
+const CLOB_IP = '104.18.34.205';
+fetch(`https://${CLOB_IP}/order`, {
+  headers: { Host: 'clob.polymarket.com' }
+});
+```
+
+### Попытка реализации
+
+**Вариант 1: Патч dns.lookup**
+```typescript
+import * as dns from 'dns';
+
+const originalLookup = dns.lookup;
+dns.lookup = function(hostname, options, callback) {
+  if (hostname === 'clob.polymarket.com') {
+    callback(null, '104.18.34.205', 4);
+    return;
+  }
+  return originalLookup(hostname, options, callback);
+};
+```
+
+**Результат:** ❌ Ошибка
+```
+TypeError: Cannot set property lookup of #<Object> which has only a getter
+```
+
+**Вариант 2: Замена https.globalAgent**
+```typescript
+import * as https from 'https';
+
+const agent = new https.Agent({ keepAlive: true });
+https.globalAgent = agent;
+```
+
+**Результат:** ❌ Ошибка
+```
+TypeError: Cannot set property globalAgent of #<Object> which has only a getter
+```
+
+### Почему не работает
+
+В **Node.js 18+** модули `dns` и `https` заморожены (frozen objects):
+
+1. **`dns.lookup`** — read-only getter, нельзя переопределить
+2. **`https.globalAgent`** — read-only getter, нельзя заменить
+3. **ClobClient** использует внутренний HTTP клиент (axios/fetch), который не принимает custom agent
+
+### Альтернативы (не реализованы)
+
+| Метод | Сложность | Применимость |
+|-------|-----------|--------------|
+| `/etc/hosts` | Низкая | Только для Linux VPS |
+| Custom DNS resolver | Высокая | Требует системный уровень |
+| Proxy с hardcoded IP | Средняя | Добавляет latency |
+| Патч node_modules | Высокая | Ломается при npm install |
+| Форк ClobClient | Высокая | Много кода |
+
+### Реальное влияние DNS
+
+DNS lookup кешируется на уровне ОС:
+- Первый запрос: +1-50ms (DNS lookup)
+- Последующие: 0ms (из кеша)
+
+**Вывод:** DNS bypass даёт экономию только на первом запросе (~20-50ms), что несущественно для нашего use case.
+
+---
+
+## 9. Summary: Сравнение всех тестов Stream Mode
+
+### Таблица результатов
+
+| # | Дата | Интервал | Delay | Попыток | Latency успеха | Min latency | In-flight | Особенности |
+|---|------|----------|-------|---------|----------------|-------------|-----------|-------------|
+| 1 | 09:32 | 0ms | 19s | 282 | 383ms | - | 309 | Baseline stream |
+| 2 | 09:47 | 0.1ms | 19s | 288 | 620ms | 292ms | 327 | Timestamp парадокс |
+| 3 | 10:17 | 2ms | **23.5s** | **72** | 434ms | 369ms | 93 | Увеличен delay |
+| 4 | 10:32 | 2ms | 23.5s | **27** | 807ms | 504ms | 54 | TCP_NODELAY (отменён) |
+
+### Ключевые выводы
+
+1. **Delay — главный фактор**
+   - 19s delay → 282-288 попыток
+   - 23.5s delay → 27-72 попытки
+   - Правильный timing экономит ~4x попыток
+
+2. **Интервал спама не критичен**
+   - 0ms vs 0.1ms vs 2ms — разница минимальна
+   - 2ms достаточно для production (не перегружает API)
+
+3. **Latency вариативен**
+   - Диапазон: 292-865ms
+   - Зависит от времени дня и нагрузки сервера
+   - Min latency ~300-400ms — это предел HTTP
+
+4. **Timestamp парадокс**
+   - "Duplicated" может прийти РАНЬШЕ "SUCCESS"
+   - Причина: разный latency у параллельных запросов
+   - Не означает ошибку — ордер уже создан на сервере
+
+5. **TCP_NODELAY**
+   - Попытка: патч `https.globalAgent`
+   - Результат: эффект неясен (latency даже выше)
+   - Решение: отменено, Node.js 18+ не даёт патчить
+
+### Рекомендуемая конфигурация
+
+```typescript
+// config.ts
+SPAM_INTERVAL_MS: 2,           // 2ms между запросами
+DELAY_BEFORE_SPAM_MS: 23500,   // 23.5s после получения tokenId
+```
+
+### Детальные отчёты
+
+- [LATENCY_STREAM_NO_DELAY.md](LATENCY_STREAM_NO_DELAY.md) — 0ms interval, 19s delay
+- [LATENCY_STREAM_0.1MS.md](LATENCY_STREAM_0.1MS.md) — 0.1ms interval, timestamp парадокс
+- [LATENCY_STREAM_2MS.md](LATENCY_STREAM_2MS.md) — 2ms interval, 23.5s delay
+- [LATENCY_2MS_TCP_NODELAY.md](LATENCY_2MS_TCP_NODELAY.md) — TCP_NODELAY эксперимент
+
+---
+
+*Обновлено: 2025-12-05*

@@ -195,11 +195,13 @@ async function runTest(slug: string, marketTimestamp: number) {
   await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
 
   // ===== PHASE 4: Spam orders =====
-  // Режим: стрим с задержкой 1ms
-  const SPAM_INTERVAL_MS = 1;  // 1ms между запросами
+  // Режим: 2 параллельных потока по 2ms каждый, сдвиг 1ms
+  const STREAM_INTERVAL_MS = 2;  // интервал внутри каждого потока
+  const NUM_STREAMS = 2;         // количество потоков
+  const STREAM_OFFSET_MS = 1;    // сдвиг между потоками
 
   log('');
-  log(`--- PHASE 4: Spamming orders (${SPAM_INTERVAL_MS}ms interval) ---`);
+  log(`--- PHASE 4: Spamming orders (${NUM_STREAMS} streams × ${STREAM_INTERVAL_MS}ms, offset ${STREAM_OFFSET_MS}ms) ---`);
 
   const spamStart = Date.now();
   let totalAttempts = 0;
@@ -208,8 +210,10 @@ async function runTest(slug: string, marketTimestamp: number) {
   const latencies: number[] = [];
   const pendingRequests: Promise<any>[] = [];
 
-  // Запускаем запросы с интервалом 1ms
-  while (!placed && totalAttempts < MAX_ATTEMPTS) {
+  // Функция отправки одного запроса
+  const sendRequest = () => {
+    if (placed || totalAttempts >= MAX_ATTEMPTS) return;
+
     totalAttempts++;
     const attemptNum = totalAttempts;
     const reqStart = performance.now();
@@ -243,15 +247,30 @@ async function runTest(slug: string, marketTimestamp: number) {
       const elapsed = Math.round((Date.now() - spamStart) / 100) / 10;
       log(`#${totalAttempts}: ${elapsed}s elapsed, ${pendingRequests.length} in-flight`);
     }
+  };
 
-    // Без паузы — максимальная скорость
-    // (setImmediate даёт event loop шанс обработать ответы)
-    if (SPAM_INTERVAL_MS > 0) {
-      await new Promise(r => setTimeout(r, SPAM_INTERVAL_MS));
-    } else {
-      await new Promise(r => setImmediate(r));
-    }
+  // Запускаем NUM_STREAMS параллельных потоков
+  const streamPromises: Promise<void>[] = [];
+
+  for (let streamId = 0; streamId < NUM_STREAMS; streamId++) {
+    const streamPromise = new Promise<void>(async (resolve) => {
+      // Сдвиг для каждого потока
+      if (streamId > 0) {
+        await new Promise(r => setTimeout(r, streamId * STREAM_OFFSET_MS));
+      }
+
+      // Поток отправляет запросы с интервалом STREAM_INTERVAL_MS
+      while (!placed && totalAttempts < MAX_ATTEMPTS) {
+        sendRequest();
+        await new Promise(r => setTimeout(r, STREAM_INTERVAL_MS));
+      }
+      resolve();
+    });
+    streamPromises.push(streamPromise);
   }
+
+  // Ждём завершения всех потоков
+  await Promise.race(streamPromises);
 
   // Ждём завершения всех pending запросов
   log(`Waiting for ${pendingRequests.length} pending requests...`);
