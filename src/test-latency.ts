@@ -184,11 +184,11 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`Signing took: ${signTime}ms`);
 
   // ===== PHASE 4: Spam orders =====
-  // Режим: 1 запрос каждую 1ms (continuous stream вместо batch)
-  const SPAM_INTERVAL_MS = 1;  // интервал между запросами
+  // Режим: непрерывный поток без пауз (0ms interval)
+  const SPAM_INTERVAL_MS = 0;  // БЕЗ паузы между запросами
 
   log('');
-  log(`--- PHASE 4: Spamming orders (1 request every ${SPAM_INTERVAL_MS}ms) ---`);
+  log(`--- PHASE 4: Spamming orders (NO DELAY, continuous) ---`);
 
   const spamStart = Date.now();
   let totalAttempts = 0;
@@ -233,8 +233,13 @@ async function runTest(slug: string, marketTimestamp: number) {
       log(`#${totalAttempts}: ${elapsed}s elapsed, ${pendingRequests.length} in-flight`);
     }
 
-    // Ждём 1ms перед следующим запросом
-    await new Promise(r => setTimeout(r, SPAM_INTERVAL_MS));
+    // Без паузы — максимальная скорость
+    // (setImmediate даёт event loop шанс обработать ответы)
+    if (SPAM_INTERVAL_MS > 0) {
+      await new Promise(r => setTimeout(r, SPAM_INTERVAL_MS));
+    } else {
+      await new Promise(r => setImmediate(r));
+    }
   }
 
   // Ждём завершения всех pending запросов
