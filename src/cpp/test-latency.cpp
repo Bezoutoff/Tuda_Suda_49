@@ -41,22 +41,31 @@ static size_t writeCallback(void* contents, size_t size, size_t nmemb, void* use
     return totalSize;
 }
 
-// Base64 decode
+// Base64 decode using EVP (more reliable)
 std::string base64Decode(const std::string& input) {
-    BIO* bio = BIO_new_mem_buf(input.data(), input.length());
-    BIO* b64 = BIO_new(BIO_f_base64());
-    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-    bio = BIO_push(b64, bio);
+    // Calculate max decoded length
+    size_t maxLen = (input.length() * 3) / 4 + 1;
+    std::string output(maxLen, '\0');
 
-    std::string output(input.length(), '\0');
-    int len = BIO_read(bio, &output[0], input.length());
-    BIO_free_all(bio);
+    EVP_ENCODE_CTX* ctx = EVP_ENCODE_CTX_new();
+    EVP_DecodeInit(ctx);
 
-    if (len > 0) {
-        output.resize(len);
-    } else {
-        output.clear();
+    int outLen = 0;
+    int tmpLen = 0;
+
+    if (EVP_DecodeUpdate(ctx, reinterpret_cast<unsigned char*>(&output[0]), &outLen,
+                         reinterpret_cast<const unsigned char*>(input.data()), input.length()) < 0) {
+        EVP_ENCODE_CTX_free(ctx);
+        return "";
     }
+
+    if (EVP_DecodeFinal(ctx, reinterpret_cast<unsigned char*>(&output[0]) + outLen, &tmpLen) < 0) {
+        EVP_ENCODE_CTX_free(ctx);
+        return "";
+    }
+
+    EVP_ENCODE_CTX_free(ctx);
+    output.resize(outLen + tmpLen);
     return output;
 }
 
