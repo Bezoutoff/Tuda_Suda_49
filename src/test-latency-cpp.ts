@@ -190,20 +190,6 @@ async function runTest(slug: string, marketTimestamp: number) {
   // Get funder address
   const funder = tradingConfig.funder || tradingConfig.privateKey;
 
-  const cppConfig = {
-    body: orderBody,
-    apiKey: tradingConfig.apiKey,
-    secret: tradingConfig.secret,
-    passphrase: tradingConfig.passphrase,
-    address: funder,
-    maxAttempts: MAX_ATTEMPTS,
-    intervalMs: INTERVAL_MS,
-  };
-
-  log(`Max attempts: ${cppConfig.maxAttempts}`);
-  log(`Interval: ${cppConfig.intervalMs}ms`);
-  log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
-
   // Debug: print expected signature for verification
   log('');
   log('--- DEBUG: Expected HMAC signature ---');
@@ -223,6 +209,23 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`  Body length: ${orderBody.length}`);
   log(`  Message length: ${testMessage.length}`);
   log(`  Expected signature: ${testSignature}`);
+
+  const cppConfig = {
+    body: orderBody,
+    apiKey: tradingConfig.apiKey,
+    secret: tradingConfig.secret,
+    passphrase: tradingConfig.passphrase,
+    address: funder,
+    maxAttempts: MAX_ATTEMPTS,
+    intervalMs: INTERVAL_MS,
+    // Pass the test timestamp for signature comparison
+    testTimestamp: serverTime,
+    testSignature: testSignature,
+  };
+
+  log(`Max attempts: ${cppConfig.maxAttempts}`);
+  log(`Interval: ${cppConfig.intervalMs}ms`);
+  log(`Address: ${cppConfig.address?.slice(0, 10)}...`);
 
   // ===== PHASE 4: Wait before spam =====
   log('');

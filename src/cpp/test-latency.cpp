@@ -305,12 +305,27 @@ int main() {
     int maxAttempts = extractJsonInt(inputJson, "maxAttempts", DEFAULT_MAX_ATTEMPTS);
     int intervalMs = extractJsonInt(inputJson, "intervalMs", DEFAULT_INTERVAL_MS);
 
+    // Extract test values for signature comparison
+    std::string testTimestamp = extractJsonString(inputJson, "testTimestamp");
+    std::string testSignature = extractJsonString(inputJson, "testSignature");
+
     // Debug: print raw extracted values
     std::cerr << "DEBUG JSON PARSING:" << std::endl;
     std::cerr << "  secret raw: [" << secret << "]" << std::endl;
     std::cerr << "  secret length: " << secret.length() << std::endl;
     std::cerr << "  body (first 50): " << body.substr(0, 50) << "..." << std::endl;
     std::cerr << "  body length: " << body.length() << std::endl;
+
+    // Compare signatures with same timestamp
+    if (!testTimestamp.empty()) {
+        std::string testMessage = testTimestamp + "POST" + ORDER_PATH + body;
+        std::string cppSignature = generateSignature(secret, testMessage, false);
+        std::cerr << "SIGNATURE COMPARISON (same timestamp):" << std::endl;
+        std::cerr << "  Timestamp: " << testTimestamp << std::endl;
+        std::cerr << "  Node.js signature: " << testSignature << std::endl;
+        std::cerr << "  C++ signature:     " << cppSignature << std::endl;
+        std::cerr << "  Match: " << (testSignature == cppSignature ? "YES" : "NO") << std::endl;
+    }
 
     if (body.empty() || apiKey.empty() || secret.empty() || passphrase.empty() || address.empty()) {
         std::cerr << "ERROR: Missing required config fields" << std::endl;
