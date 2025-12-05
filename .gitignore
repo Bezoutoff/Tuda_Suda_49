@@ -20,3 +20,6 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Troubleshooting docs (local only)
+TROUBLESHOOTING_CPP_401.md

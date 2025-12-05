@@ -13,7 +13,8 @@
       "Bash(npm info:*)",
       "Bash(npm install:*)",
       "Bash(node -e:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []

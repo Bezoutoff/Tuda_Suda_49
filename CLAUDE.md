@@ -269,7 +269,7 @@ HTTP POST /order:
 
 ## C++ Latency Test
 
-### Статус: Auth работает, готов к тестированию
+### Статус: ✅ Auth работает, готов к production тестированию
 
 C++ версия latency теста для сравнения с TypeScript.
 Цель: проверить, даст ли C++ на libcurl выигрыш в latency.
@@ -278,18 +278,19 @@ C++ версия latency теста для сравнения с TypeScript.
 - `src/cpp/test-latency.cpp` — C++ HTTP спам с libcurl + OpenSSL HMAC
 - `src/test-latency-cpp.ts` — Node.js обёртка (polling + pre-sign)
 - `build-cpp.sh` — скрипт компиляции для Ubuntu
-- `TROUBLESHOOTING_CPP_401.md` — история отладки 401 ошибки (РЕШЕНО)
 
 ### Что работает
 - HMAC-SHA256 подписи совпадают между Node.js и C++ (Match: YES)
-- URL-safe base64 decode (- вместо +, _ вместо /)
+- URL-safe base64 для подписей (`+`→`-`, `/`→`_`)
 - JSON парсинг credentials и body
 - Server time синхронизация
-- Аутентификация (POST запросы получают 400, не 401)
+- **Аутентификация работает** (получаем 400, не 401)
 
-### Решённая проблема: [object Object]
-Была транзиентная проблема где `useServerTime` в @polymarket/clob-client отправлял
-`POLY_TIMESTAMP: "[object Object]"` вместо строки timestamp. Решено переустановкой node_modules.
+### Решённые проблемы 401 Unauthorized
+
+1. **POLY_ADDRESS**: Нужен wallet address, не funder address
+2. **Header names**: `POLY_ADDRESS` (underscore), не `POLY-ADDRESS` (hyphen)
+3. **Signature**: URL-safe base64 (`+`→`-`, `/`→`_`)
 
 ### Команды
 ```bash
@@ -305,7 +306,7 @@ npm run test-latency-cpp btc-updown-15m-<TIMESTAMP>
 
 ## История
 
-- **2025-12-05**: C++ latency test — 401 РЕШЕНО (была [object Object] в POLY_TIMESTAMP)
+- **2025-12-05**: C++ latency test — Auth работает! (fix: wallet addr, underscore headers, URL-safe base64)
 - **2025-12-04**: Добавлен test-latency.ts для измерения latency
 - **2025-12-03**: 10 ордеров с индивидуальными expiration times
 - **2025-11-25**: Создан проект, выделен из live-trade-PM
