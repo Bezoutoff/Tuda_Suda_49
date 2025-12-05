@@ -184,8 +184,8 @@ async function runTest(slug: string, marketTimestamp: number) {
   await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
 
   // ===== PHASE 4: Spam orders =====
-  // Режим: минимальная задержка между запросами
-  const SPAM_INTERVAL_MS = 0.1;  // 0.1ms между запросами
+  // Режим: стрим с задержкой 2ms
+  const SPAM_INTERVAL_MS = 2;  // 2ms между запросами
 
   log('');
   log(`--- PHASE 4: Spamming orders (${SPAM_INTERVAL_MS}ms interval) ---`);
