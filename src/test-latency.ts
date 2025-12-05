@@ -181,6 +181,17 @@ async function runTest(slug: string, marketTimestamp: number) {
   // ===== PHASE 3: Wait before spam =====
   log('');
   log(`--- PHASE 3: Waiting ${DELAY_BEFORE_SPAM_MS / 1000}s before spam ---`);
+
+  // Pre-connect: warm up TLS session
+  try {
+    const warmupStart = performance.now();
+    await fetch('https://clob.polymarket.com/health');
+    const warmupTime = Math.round(performance.now() - warmupStart);
+    log(`TLS warm-up: ${warmupTime}ms`);
+  } catch (err) {
+    log(`TLS warm-up failed (ok): ${err}`);
+  }
+
   await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
 
   // ===== PHASE 4: Spam orders =====
