@@ -195,13 +195,11 @@ async function runTest(slug: string, marketTimestamp: number) {
   await new Promise(r => setTimeout(r, DELAY_BEFORE_SPAM_MS));
 
   // ===== PHASE 4: Spam orders =====
-  // Режим: 2 параллельных потока по 2ms каждый, сдвиг 1ms
-  const STREAM_INTERVAL_MS = 2;  // интервал внутри каждого потока
-  const NUM_STREAMS = 2;         // количество потоков
-  const STREAM_OFFSET_MS = 1;    // сдвиг между потоками
+  // Режим: простой стрим с интервалом 2ms
+  const SPAM_INTERVAL_MS = 2;
 
   log('');
-  log(`--- PHASE 4: Spamming orders (${NUM_STREAMS} streams × ${STREAM_INTERVAL_MS}ms, offset ${STREAM_OFFSET_MS}ms) ---`);
+  log(`--- PHASE 4: Spamming orders (${SPAM_INTERVAL_MS}ms interval) ---`);
 
   const spamStart = Date.now();
   let totalAttempts = 0;
@@ -210,10 +208,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   const latencies: number[] = [];
   const pendingRequests: Promise<any>[] = [];
 
-  // Функция отправки одного запроса
-  const sendRequest = () => {
-    if (placed || totalAttempts >= MAX_ATTEMPTS) return;
-
+  while (!placed && totalAttempts < MAX_ATTEMPTS) {
     totalAttempts++;
     const attemptNum = totalAttempts;
     const reqStart = performance.now();
@@ -247,30 +242,9 @@ async function runTest(slug: string, marketTimestamp: number) {
       const elapsed = Math.round((Date.now() - spamStart) / 100) / 10;
       log(`#${totalAttempts}: ${elapsed}s elapsed, ${pendingRequests.length} in-flight`);
     }
-  };
 
-  // Запускаем NUM_STREAMS параллельных потоков
-  const streamPromises: Promise<void>[] = [];
-
-  for (let streamId = 0; streamId < NUM_STREAMS; streamId++) {
-    const streamPromise = new Promise<void>(async (resolve) => {
-      // Сдвиг для каждого потока
-      if (streamId > 0) {
-        await new Promise(r => setTimeout(r, streamId * STREAM_OFFSET_MS));
-      }
-
-      // Поток отправляет запросы с интервалом STREAM_INTERVAL_MS
-      while (!placed && totalAttempts < MAX_ATTEMPTS) {
-        sendRequest();
-        await new Promise(r => setTimeout(r, STREAM_INTERVAL_MS));
-      }
-      resolve();
-    });
-    streamPromises.push(streamPromise);
+    await new Promise(r => setTimeout(r, SPAM_INTERVAL_MS));
   }
-
-  // Ждём завершения всех потоков
-  await Promise.race(streamPromises);
 
   // Ждём завершения всех pending запросов
   log(`Waiting for ${pendingRequests.length} pending requests...`);
