@@ -41,13 +41,16 @@ static size_t writeCallback(void* contents, size_t size, size_t nmemb, void* use
     return totalSize;
 }
 
-// Base64 decode - simple table-based implementation
+// Base64 decode - supports both standard and URL-safe base64
 std::string base64Decode(const std::string& input) {
     static const std::string base64_chars =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     auto indexOf = [&](char c) -> int {
         if (c == '=') return -1;
+        // Handle URL-safe base64: convert - to + and _ to /
+        if (c == '-') c = '+';
+        if (c == '_') c = '/';
         size_t pos = base64_chars.find(c);
         return (pos != std::string::npos) ? (int)pos : -2;
     };
