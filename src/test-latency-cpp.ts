@@ -240,7 +240,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('--- TEST: SDK postSignedOrder (same as test-latency.ts) ---');
   try {
     const sdkResult = await tradingService.postSignedOrder(signedOrder, expirationTimestamp);
-    log(`  SUCCESS! Order ID: ${sdkResult.id}`);
+    log(`  SUCCESS! Order ID: ${sdkResult.orderId}`);
     log(`  Raw response: ${JSON.stringify(sdkResult.rawResponse).slice(0, 100)}...`);
   } catch (err: any) {
     log(`  FAILED: ${err.message}`);
