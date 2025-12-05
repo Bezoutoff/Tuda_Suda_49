@@ -14,13 +14,13 @@ export const BOT_CONFIG = {
     'xrp-updown-15m',
   ],
 
-  // Order config: price + expiration buffer (seconds before market start)
+  // Order config: price + size + expiration buffer (seconds before market start)
   ORDER_CONFIG: [
-    { price: 0.49, expirationBuffer: 600 },  // 10 мин до старта
-    { price: 0.48, expirationBuffer: 360 },  // 6 мин до старта
-    { price: 0.47, expirationBuffer: 120 },  // 2 мин до старта
-    { price: 0.46, expirationBuffer: 30 },   // 30 сек до старта
-    { price: 0.45, expirationBuffer: 1 },    // 1 сек до старта
+    { price: 0.49, size: 5,  expirationBuffer: 600 },  // 10 мин до старта
+    { price: 0.48, size: 7,  expirationBuffer: 360 },  // 6 мин до старта
+    { price: 0.47, size: 8,  expirationBuffer: 120 },  // 2 мин до старта
+    { price: 0.46, size: 9,  expirationBuffer: 30 },   // 30 сек до старта
+    { price: 0.45, size: 10, expirationBuffer: 1 },    // 1 сек до старта
   ],
 
   // Default order size (can be overridden by BOT_ORDER_SIZE env var)

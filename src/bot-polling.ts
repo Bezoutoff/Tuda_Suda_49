@@ -11,7 +11,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { TradingService } from './trading-service';
-import { tradingConfig, validateTradingConfig, BOT_CONFIG, getOrderSize } from './config';
+import { tradingConfig, validateTradingConfig, BOT_CONFIG } from './config';
 
 const INTERVAL_SECONDS = 900; // 15 минут
 
@@ -94,11 +94,10 @@ async function spamOrdersUntilSuccess(
   marketTimestamp: number,
   slug: string
 ): Promise<boolean> {
-  const size = getOrderSize();
   const orderConfig = BOT_CONFIG.ORDER_CONFIG;
 
   log(`Starting order spam for ${slug}:`);
-  log(`  Size: ${size} | Prices: ${orderConfig.map(c => c.price).join(', ')}`);
+  log(`  Prices (size): ${orderConfig.map(c => `${c.price}($${c.size})`).join(', ')}`);
   log(`  Total orders: ${orderConfig.length * 2} (${orderConfig.length} UP + ${orderConfig.length} DOWN)`);
   log(`  Expirations (sec before start): ${orderConfig.map(c => c.expirationBuffer).join(', ')}`);
 
@@ -120,7 +119,7 @@ async function spamOrdersUntilSuccess(
   const signedOrders: SignedOrderInfo[] = [];
 
   try {
-    for (const { price, expirationBuffer } of orderConfig) {
+    for (const { price, size, expirationBuffer } of orderConfig) {
       const expirationTimestamp = marketTimestamp - expirationBuffer;
 
       // UP order (YES token)
@@ -147,7 +146,7 @@ async function spamOrdersUntilSuccess(
       });
       signedOrders.push({ signedOrder: downOrder, side: 'DOWN', price, expirationTimestamp, placed: false });
 
-      log(`  ${price}: expires ${formatTimestamp(expirationTimestamp)}`);
+      log(`  ${price} ($${size}): expires ${formatTimestamp(expirationTimestamp)}`);
     }
     log(`All ${signedOrders.length} orders pre-signed successfully`);
   } catch (error: any) {
@@ -283,9 +282,9 @@ async function pollAndPlaceOrders(
  */
 async function main() {
   log('Starting BTC Updown Polling Bot...');
-  log(`Order size: ${getOrderSize()} USDC`);
-  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c => `${c.price}(${c.expirationBuffer}s)`).join(', ')}`);
+  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c => `${c.price}($${c.size})`).join(', ')}`);
   log(`Total orders: ${BOT_CONFIG.ORDER_CONFIG.length * 2} (${BOT_CONFIG.ORDER_CONFIG.length} UP + ${BOT_CONFIG.ORDER_CONFIG.length} DOWN)`);
+  log(`Total size: $${BOT_CONFIG.ORDER_CONFIG.reduce((sum, c) => sum + c.size, 0) * 2} (UP + DOWN)`);
   log(`Poll interval: ${BOT_CONFIG.POLL_INTERVAL_MS}ms`);
   log(`Parallel requests: ${BOT_CONFIG.PARALLEL_SPAM_REQUESTS} per order, max ${BOT_CONFIG.MAX_ORDER_ATTEMPTS} attempts`);
 
