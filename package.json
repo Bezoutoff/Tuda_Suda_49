@@ -11,7 +11,9 @@
     "test-ws": "ts-node src/test-ws.ts",
     "bot-polling": "ts-node src/bot-polling.ts",
     "bot-fast": "node dist/bot-polling.js",
-    "test-latency": "ts-node src/test-latency.ts"
+    "test-latency": "ts-node src/test-latency.ts",
+    "test-latency-cpp": "ts-node src/test-latency-cpp.ts",
+    "build:cpp": "bash build-cpp.sh"
   },
   "repository": {
     "type": "git",
