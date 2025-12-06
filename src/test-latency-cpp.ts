@@ -20,9 +20,14 @@ import { TradingService } from './trading-service';
 import { tradingConfig, validateTradingConfig, BOT_CONFIG, getOrderSize } from './config';
 import { OrderType } from '@polymarket/clob-client';
 
-// Latency log files
-const LATENCY_LOG_FILE = path.join(__dirname, '..', 'latency-cpp.csv');
+// Latency log files (same as test-latency.ts for unified analysis)
+const LATENCY_LOG_FILE = path.join(__dirname, '..', 'latency.csv');
+const LATENCY_SUMMARY_FILE = path.join(__dirname, '..', 'latency_summary.csv');
 const CPP_BINARY = path.join(__dirname, '..', 'dist', 'test-latency-cpp');
+
+// CSV header
+const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,side,price,size,latency_ms,status,order_id,attempt,source\n';
+const SUMMARY_HEADER = 'market_time,slug,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source\n';
 
 // Test parameters
 const TEST_PRICE = 0.45;
@@ -31,6 +36,14 @@ const MAX_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
 const INTERVAL_MS = 2;
 const DELAY_BEFORE_SPAM_MS = BOT_CONFIG.DELAY_BEFORE_SPAM_MS;
 const POLL_INTERVAL_MS = BOT_CONFIG.POLL_INTERVAL_MS;
+
+// State for logging
+let cachedServerTime = 0;
+let cachedLocalTime = 0;
+let currentMarketTime = 0;
+let currentSlug = '';
+let attemptCounter = 0;
+const latencyRecords: { latencyMs: number; success: boolean; attempt: number; orderId?: string }[] = [];
 
 // Logger with timestamp
 function log(message: string) {
@@ -41,16 +54,78 @@ function log(message: string) {
 // Initialize latency log with header if not exists
 function initLatencyLog() {
   if (!fs.existsSync(LATENCY_LOG_FILE)) {
-    fs.writeFileSync(LATENCY_LOG_FILE, 'timestamp,slug,side,price,latency_ms,success,error\n');
+    fs.writeFileSync(LATENCY_LOG_FILE, CSV_HEADER);
+  }
+  if (!fs.existsSync(LATENCY_SUMMARY_FILE)) {
+    fs.writeFileSync(LATENCY_SUMMARY_FILE, SUMMARY_HEADER);
   }
 }
 
+// Update cached server time
+async function updateServerTime(): Promise<void> {
+  const localBefore = Date.now();
+  const resp = await fetch('https://clob.polymarket.com/time');
+  const serverSec = parseInt(await resp.text());
+  cachedServerTime = serverSec;
+  cachedLocalTime = localBefore;
+}
+
+// Get current server time in ms (extrapolated)
+function getServerTimeMs(): number {
+  const elapsed = Date.now() - cachedLocalTime;
+  return cachedServerTime * 1000 + elapsed;
+}
+
+// Check if should log this result
+function shouldLog(success: boolean, error?: string): boolean {
+  if (success) return true;
+  if (error?.includes('orderbook does not exist')) return true;
+  return false;
+}
+
 // Append latency record to CSV
-function logLatency(slug: string, side: string, price: number, latencyMs: number, success: boolean, error?: string) {
-  const timestamp = new Date().toISOString();
-  const errorMsg = error ? `"${error.replace(/"/g, '""')}"` : '';
-  const line = `${timestamp},${slug},${side},${price},${latencyMs},${success},${errorMsg}\n`;
+function logLatency(
+  slug: string,
+  side: string,
+  price: number,
+  size: number,
+  latencyMs: number,
+  success: boolean,
+  orderId?: string,
+  error?: string
+) {
+  if (!shouldLog(success, error)) return;
+
+  attemptCounter++;
+  const serverTimeMs = getServerTimeMs();
+  const secToMarket = ((currentMarketTime * 1000) - serverTimeMs) / 1000;
+  const status = success ? 'success' : 'orderbook_not_exist';
+
+  const line = `${serverTimeMs},${currentMarketTime},${secToMarket.toFixed(3)},${slug},${side},${price},${size},${latencyMs},${status},${orderId || ''},${attemptCounter},cpp\n`;
   fs.appendFileSync(LATENCY_LOG_FILE, line);
+
+  latencyRecords.push({ latencyMs, success, attempt: attemptCounter, orderId });
+}
+
+// Write summary after test completes
+function writeSummary() {
+  if (latencyRecords.length === 0) return;
+
+  const successRecords = latencyRecords.filter(r => r.success);
+  const latencies = latencyRecords.map(r => r.latencyMs);
+  const sorted = [...latencies].sort((a, b) => a - b);
+
+  const firstSuccess = successRecords.length > 0
+    ? Math.min(...successRecords.map(r => r.attempt))
+    : 0;
+
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+  const median = sorted[Math.floor(sorted.length / 2)];
+
+  const line = `${currentMarketTime},${currentSlug},${latencyRecords.length},${successRecords.length},${firstSuccess},${min},${max},${avg},${median},cpp\n`;
+  fs.appendFileSync(LATENCY_SUMMARY_FILE, line);
 }
 
 /**
@@ -99,10 +174,17 @@ async function runTest(slug: string, marketTimestamp: number) {
   // Initialize latency logging
   initLatencyLog();
 
+  // Set global state for logging
+  currentMarketTime = marketTimestamp;
+  currentSlug = slug;
+  attemptCounter = 0;
+  latencyRecords.length = 0;
+
   log(`=`.repeat(60));
   log(`C++ LATENCY TEST: ${slug}`);
   log(`Market time: ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
   log(`Latency CSV: ${LATENCY_LOG_FILE}`);
+  log(`Summary CSV: ${LATENCY_SUMMARY_FILE}`);
   log(`C++ binary: ${CPP_BINARY}`);
   log(`=`.repeat(60));
 
@@ -305,6 +387,10 @@ async function runTest(slug: string, marketTimestamp: number) {
   log('');
   log('--- PHASE 5: Running C++ binary ---');
 
+  // Update server time before spam
+  await updateServerTime();
+  log(`Server time synced: ${cachedServerTime}`);
+
   const spamStart = Date.now();
 
   return new Promise<void>((resolve, reject) => {
@@ -336,9 +422,9 @@ async function runTest(slug: string, marketTimestamp: number) {
 
           if (success) {
             log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${message}`);
-            logLatency(slug, 'UP', TEST_PRICE, latency, true);
+            logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), latency, true, message);
           } else {
-            logLatency(slug, 'UP', TEST_PRICE, latency, false, message);
+            logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), latency, false, undefined, message);
           }
         } else if (line.startsWith('WARMUP:')) {
           const warmup = parseInt(line.split(':')[1]);
@@ -369,6 +455,11 @@ async function runTest(slug: string, marketTimestamp: number) {
       log('='.repeat(60));
       log(`  Exit code: ${code}`);
       log(`  Total time: ${spamElapsed}s`);
+
+      // Write summary to CSV
+      writeSummary();
+      log(`Summary written to: ${LATENCY_SUMMARY_FILE}`);
+
       log('='.repeat(60));
 
       if (code === 0) {
