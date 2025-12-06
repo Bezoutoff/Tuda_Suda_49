@@ -36,6 +36,7 @@ const MAX_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
 const INTERVAL_MS = 2;
 const DELAY_BEFORE_SPAM_MS = BOT_CONFIG.DELAY_BEFORE_SPAM_MS;
 const POLL_INTERVAL_MS = BOT_CONFIG.POLL_INTERVAL_MS;
+const INTERVAL_SECONDS = 900; // 15 minutes
 
 // State for logging
 let cachedServerTime = 0;
@@ -370,8 +371,8 @@ async function runTest(slug: string, marketTimestamp: number) {
 
     if (rawResp.status === 200) {
       log('  >>> Raw HTTP works! Order placed.');
-      // Order was placed, exit - don't run C++
-      process.exit(0);
+      // Order was placed, skip C++ for this market
+      return;
     }
   } catch (err: any) {
     log(`  Error: ${err.message}`);
@@ -486,16 +487,38 @@ async function main() {
     process.exit(1);
   }
 
-  // Extract timestamp from slug
-  const match = slug.match(/-(\d+)$/);
+  // Extract pattern and timestamp from slug
+  const match = slug.match(/^(.+)-(\d+)$/);
   if (!match) {
     console.log('ERROR: Invalid slug format. Expected: xxx-updown-15m-TIMESTAMP');
     process.exit(1);
   }
 
-  const marketTimestamp = parseInt(match[1]);
+  const pattern = match[1]; // e.g., "btc-updown-15m"
+  let marketTimestamp = parseInt(match[2]);
 
-  await runTest(slug, marketTimestamp);
+  // Continuous loop
+  while (true) {
+    const currentSlug = `${pattern}-${marketTimestamp}`;
+
+    log(`\n${'='.repeat(60)}`);
+    log(`Processing: ${currentSlug}`);
+    log(`Market time: ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
+    log(`${'='.repeat(60)}`);
+
+    try {
+      await runTest(currentSlug, marketTimestamp);
+    } catch (err: any) {
+      log(`Error processing market: ${err.message}`);
+    }
+
+    // Move to next market (+900 seconds = 15 minutes)
+    marketTimestamp += INTERVAL_SECONDS;
+    log(`\nNext market: ${pattern}-${marketTimestamp} at ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
+
+    // Small delay before next iteration
+    await new Promise(r => setTimeout(r, 1000));
+  }
 }
 
 // Handle termination
