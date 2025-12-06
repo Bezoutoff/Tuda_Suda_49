@@ -195,22 +195,25 @@ PARALLEL_SPAM_REQUESTS: 60,  // 60 параллельных запросов
 
 ## Тестирование Latency
 
-Скрипт `test-latency.ts` измеряет время ответа сервера Polymarket при отправке ордеров.
+Два скрипта для измерения latency:
+- `test-latency.ts` — Node.js версия
+- `test-latency-cpp.ts` — Node.js wrapper + C++ HTTP spam (raw HTTP)
 
 ### Запуск
 
 ```bash
-# Локально
+# Node.js версия
 npm run test-latency btc-updown-15m-1764930600
 
-# На VPS
-git pull
-npm run test-latency btc-updown-15m-1764930600
+# C++ версия (непрерывный режим)
+npm run test-latency-cpp btc-updown-15m-1764930600
 
-# Через PM2 (фоновый режим)
-pm2 start "npm run test-latency btc-updown-15m-1764930600" --name "latency-test"
-pm2 logs latency-test
+# На VPS через PM2
+pm2 start "npm run test-latency-cpp btc-updown-15m-1764930600" --name "latency-cpp"
+pm2 logs latency-cpp
 ```
+
+**C++ версия работает непрерывно**: после обработки маркета автоматически переходит к следующему (+900 сек).
 
 ### Что измеряется
 
@@ -229,15 +232,82 @@ pm2 logs latency-test
 4. **Delay** — ждёт 23.5 сек (маркет активируется ~25 сек после создания)
 5. **Spam** — отправляет POST запросы каждые 2ms до успеха
 6. **Results** — выводит статистику latency
+7. **Next market** — (только C++) переходит к следующему маркету
 
 ### Логирование в CSV
 
-Результаты сохраняются в `latency.csv`:
+Оба скрипта пишут в **единый файл** `latency.csv`:
 
 ```csv
-timestamp,slug,side,price,latency_ms,success,error
-2025-12-04T10:30:00.000Z,btc-updown-15m-1764929700,UP,0.45,285,true,
-2025-12-04T10:30:00.300Z,btc-updown-15m-1764929700,UP,0.45,290,false,market not active
+server_time_ms,market_time,sec_to_market,slug,side,price,size,latency_ms,status,order_id,attempt,source
+1733401234567,1733402100,865.433,btc-updown-15m-1733402100,UP,0.45,5,285,success,0xa4af61c8...,1,nodejs
+1733401234890,1733402100,865.110,btc-updown-15m-1733402100,UP,0.45,5,312,orderbook_not_exist,,2,cpp
+```
+
+#### Поля CSV
+
+| Поле | Описание |
+|------|----------|
+| `server_time_ms` | Время сервера Polymarket в миллисекундах (Unix timestamp × 1000 + ms) |
+| `market_time` | Unix timestamp старта маркета |
+| `sec_to_market` | Секунды до старта маркета (отрицательное = после старта) |
+| `slug` | Slug маркета |
+| `side` | UP или DOWN |
+| `price` | Цена ордера |
+| `size` | Размер в USDC |
+| `latency_ms` | Время ответа API в миллисекундах |
+| `status` | `success` или `orderbook_not_exist` |
+| `order_id` | ID ордера (пусто при ошибке) |
+| `attempt` | Номер попытки |
+| `source` | `nodejs` или `cpp` |
+
+#### Фильтрация логов
+
+Логируются **только**:
+- ✅ Успешные ордера (`status: success`)
+- ✅ Ошибка `orderbook does not exist` (маркет ещё не активен)
+
+**НЕ логируются**:
+- ❌ `Duplicated order` (ордер уже в очереди)
+- ❌ Другие ошибки
+
+### Summary файл
+
+После каждого маркета добавляется строка в `latency_summary.csv`:
+
+```csv
+market_time,slug,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source
+1733402100,btc-updown-15m-1733402100,50,1,23,245,412,298,285,nodejs
+```
+
+### Анализ в Python
+
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv('latency.csv')
+
+# График latency vs время до старта маркета
+for slug in df['slug'].unique():
+    m = df[df['slug'] == slug]
+    plt.figure(figsize=(12, 6))
+
+    success = m[m['status'] == 'success']
+    errors = m[m['status'] == 'orderbook_not_exist']
+
+    plt.scatter(success['sec_to_market'], success['latency_ms'],
+                c='green', label='Success', alpha=0.7)
+    plt.scatter(errors['sec_to_market'], errors['latency_ms'],
+                c='red', label='Orderbook not exist', alpha=0.7)
+
+    plt.axvline(x=0, color='black', linestyle='--', label='Market start')
+    plt.xlabel('Seconds to market start')
+    plt.ylabel('Latency (ms)')
+    plt.title(f'Latency: {slug}')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f'latency_{slug}.png', dpi=150)
 ```
 
 ### Интерпретация результатов
