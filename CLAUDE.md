@@ -269,7 +269,7 @@ HTTP POST /order:
 
 ## C++ Latency Test
 
-### Статус: ✅ Auth работает, готов к production тестированию
+### Статус: ✅ Raw HTTP работает
 
 C++ версия latency теста для сравнения с TypeScript.
 Цель: проверить, даст ли C++ на libcurl выигрыш в latency.
@@ -279,18 +279,39 @@ C++ версия latency теста для сравнения с TypeScript.
 - `src/test-latency-cpp.ts` — Node.js обёртка (polling + pre-sign)
 - `build-cpp.sh` — скрипт компиляции для Ubuntu
 
-### Что работает
-- HMAC-SHA256 подписи совпадают между Node.js и C++ (Match: YES)
-- URL-safe base64 для подписей (`+`→`-`, `/`→`_`)
-- JSON парсинг credentials и body
-- Server time синхронизация
-- **Аутентификация работает** (получаем 400, не 401)
+### Запуск
+```bash
+npm run build:cpp  # компиляция C++
+npm run test-latency-cpp btc-updown-15m-TIMESTAMP
+```
 
-### Решённые проблемы 401 Unauthorized
+### Решённые проблемы
 
-1. **POLY_ADDRESS**: Нужен wallet address, не funder address
-2. **Header names**: `POLY_ADDRESS` (underscore), не `POLY-ADDRESS` (hyphen)
-3. **Signature**: URL-safe base64 (`+`→`-`, `/`→`_`)
+#### 1. 401 Unauthorized
+- **POLY_ADDRESS**: Нужен wallet address, не funder address
+- **Header names**: `POLY_ADDRESS` (underscore), не `POLY-ADDRESS` (hyphen)
+- **Signature**: URL-safe base64 (`+`→`-`, `/`→`_`)
+
+#### 2. 400 "Invalid order payload"
+SDK конвертирует типы в `orderToJson()`:
+- `side: 0` → `side: "BUY"` (строка, не число!)
+- `orderType: 1` → `orderType: "GTD"` (строка, не число!)
+
+**Исправление:**
+```typescript
+const transformedOrder = {
+  ...signedOrder,
+  salt: parseInt(signedOrder.salt, 10),
+  side: signedOrder.side === 0 ? 'BUY' : 'SELL',  // KEY FIX
+};
+
+const orderBody = JSON.stringify([{
+  deferExec: false,
+  order: transformedOrder,
+  owner: tradingConfig.apiKey,
+  orderType: 'GTD',  // String, not number!
+}]);
+```
 
 ### Команды
 ```bash
