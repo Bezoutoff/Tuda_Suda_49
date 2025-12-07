@@ -381,6 +381,7 @@ int main() {
     }
 
     std::cout << "WARMUP:" << warmupMs << std::endl;
+    std::cout.flush();
     std::cerr << "Server time: " << serverTime << " (warmup: " << warmupMs << "ms)" << std::endl;
 
     // Spam loop
@@ -415,10 +416,12 @@ int main() {
             if (isSuccess(responseBuf.data, orderId)) {
                 success = true;
                 std::cout << "ATTEMPT:" << attempts << ":" << latencyMs << ":true:" << orderId << std::endl;
+                std::cout.flush();
                 std::cerr << "#" << attempts << ": " << latencyMs << "ms - SUCCESS! Order: " << orderId << std::endl;
             } else {
                 std::string error = extractError(responseBuf.data);
                 std::cout << "ATTEMPT:" << attempts << ":" << latencyMs << ":false:" << error << std::endl;
+                std::cout.flush();
 
                 if (attempts % 50 == 0 || attempts <= 3) {
                     std::cerr << "#" << attempts << ": " << latencyMs << "ms - " << error << std::endl;
@@ -427,6 +430,7 @@ int main() {
         } else {
             std::string curlError = curl_easy_strerror(res);
             std::cout << "ATTEMPT:" << attempts << ":" << latencyMs << ":false:curl_" << curlError << std::endl;
+            std::cout.flush();
 
             if (attempts % 50 == 0) {
                 std::cerr << "#" << attempts << ": " << latencyMs << "ms - curl error: " << curlError << std::endl;
@@ -445,6 +449,7 @@ int main() {
     } else {
         std::cout << "FAILED:max_attempts_reached" << std::endl;
     }
+    std::cout.flush();
 
     // Calculate stats
     if (!latencies.empty()) {
@@ -461,6 +466,7 @@ int main() {
 
         std::cout << "STATS:min=" << minL << ",max=" << maxL << ",avg=" << avg
                   << ",median=" << median << ",total=" << latencies.size() << std::endl;
+        std::cout.flush();
 
         std::cerr << "Stats: min=" << minL << "ms, max=" << maxL << "ms, avg=" << avg
                   << "ms, median=" << median << "ms, total=" << latencies.size() << std::endl;
