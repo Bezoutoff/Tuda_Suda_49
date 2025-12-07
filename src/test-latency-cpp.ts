@@ -20,14 +20,12 @@ import { TradingService } from './trading-service';
 import { tradingConfig, validateTradingConfig, BOT_CONFIG, getOrderSize } from './config';
 import { OrderType } from '@polymarket/clob-client';
 
-// Latency log files (same as test-latency.ts for unified analysis)
+// Latency log file (unified format with summary stats in each row)
 const LATENCY_LOG_FILE = path.join(__dirname, '..', 'latency.csv');
-const LATENCY_SUMMARY_FILE = path.join(__dirname, '..', 'latency_summary.csv');
 const CPP_BINARY = path.join(__dirname, '..', 'dist', 'test-latency-cpp');
 
-// CSV header
-const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,side,price,size,latency_ms,status,order_id,attempt,source\n';
-const SUMMARY_HEADER = 'market_time,slug,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source\n';
+// CSV header (unified format with summary stats)
+const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,side,price,size,latency_ms,status,order_id,attempt,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source\n';
 
 // Test parameters
 const TEST_PRICE = 0.45;
@@ -58,9 +56,6 @@ function initLatencyLog() {
   if (!fs.existsSync(LATENCY_LOG_FILE)) {
     fs.writeFileSync(LATENCY_LOG_FILE, CSV_HEADER);
   }
-  if (!fs.existsSync(LATENCY_SUMMARY_FILE)) {
-    fs.writeFileSync(LATENCY_SUMMARY_FILE, SUMMARY_HEADER);
-  }
 }
 
 // Update cached server time
@@ -85,49 +80,47 @@ function shouldLog(success: boolean, error?: string): boolean {
   return false;
 }
 
-// Append latency record to CSV
-function logLatency(
+// Track latency for later aggregation
+function trackLatency(latencyMs: number, success: boolean, orderId?: string, error?: string) {
+  if (!shouldLog(success, error)) return;
+  attemptCounter++;
+  latencyRecords.push({ latencyMs, success, attempt: attemptCounter, orderId });
+}
+
+// Write final result to CSV (one row per market with all stats)
+function writeResult(
   slug: string,
   side: string,
   price: number,
   size: number,
-  latencyMs: number,
+  finalLatencyMs: number,
   success: boolean,
-  orderId?: string,
-  error?: string
+  orderId?: string
 ) {
-  if (!shouldLog(success, error)) return;
-
-  attemptCounter++;
   const serverTimeMs = getServerTimeMs();
   const secToMarket = ((currentMarketTime * 1000) - serverTimeMs) / 1000;
-  const status = success ? 'success' : 'orderbook_not_exist';
+  const status = success ? 'success' : 'failed';
 
-  const line = `${serverTimeMs},${currentMarketTime},${secToMarket.toFixed(3)},${slug},${side},${price},${size},${latencyMs},${status},${orderId || ''},${attemptCounter},cpp\n`;
-  fs.appendFileSync(LATENCY_LOG_FILE, line);
-
-  latencyRecords.push({ latencyMs, success, attempt: attemptCounter, orderId });
-}
-
-// Write summary after test completes
-function writeSummary() {
-  if (latencyRecords.length === 0) return;
-
+  // Calculate summary stats
+  const totalAttempts = latencyRecords.length;
   const successRecords = latencyRecords.filter(r => r.success);
-  const latencies = latencyRecords.map(r => r.latencyMs);
-  const sorted = [...latencies].sort((a, b) => a - b);
-
-  const firstSuccess = successRecords.length > 0
+  const successCount = successRecords.length;
+  const firstSuccessAttempt = successRecords.length > 0
     ? Math.min(...successRecords.map(r => r.attempt))
     : 0;
 
-  const min = sorted[0];
-  const max = sorted[sorted.length - 1];
-  const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
-  const median = sorted[Math.floor(sorted.length / 2)];
+  let minMs = 0, maxMs = 0, avgMs = 0, medianMs = 0;
+  if (latencyRecords.length > 0) {
+    const latencies = latencyRecords.map(r => r.latencyMs);
+    const sorted = [...latencies].sort((a, b) => a - b);
+    minMs = sorted[0];
+    maxMs = sorted[sorted.length - 1];
+    avgMs = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+    medianMs = sorted[Math.floor(sorted.length / 2)];
+  }
 
-  const line = `${currentMarketTime},${currentSlug},${latencyRecords.length},${successRecords.length},${firstSuccess},${min},${max},${avg},${median},cpp\n`;
-  fs.appendFileSync(LATENCY_SUMMARY_FILE, line);
+  const line = `${serverTimeMs},${currentMarketTime},${secToMarket.toFixed(3)},${slug},${side},${price},${size},${finalLatencyMs},${status},${orderId || ''},${attemptCounter},${totalAttempts},${successCount},${firstSuccessAttempt},${minMs},${maxMs},${avgMs},${medianMs},cpp\n`;
+  fs.appendFileSync(LATENCY_LOG_FILE, line);
 }
 
 /**
@@ -186,7 +179,6 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`C++ LATENCY TEST: ${slug}`);
   log(`Market time: ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
   log(`Latency CSV: ${LATENCY_LOG_FILE}`);
-  log(`Summary CSV: ${LATENCY_SUMMARY_FILE}`);
   log(`C++ binary: ${CPP_BINARY}`);
   log(`=`.repeat(60));
 
@@ -391,25 +383,25 @@ async function runTest(slug: string, marketTimestamp: number) {
       // Check if order was actually placed (orderID not empty)
       if (orderId) {
         log('  >>> Raw HTTP works! Order placed.');
-        logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, true, orderId);
-        writeSummary();
-        log(`Summary written to: ${LATENCY_SUMMARY_FILE}`);
+        trackLatency(rawLatency, true, orderId);
+        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, true, orderId);
+        log(`Result written to: ${LATENCY_LOG_FILE}`);
         // Order was placed, skip C++ for this market
         return;
       } else {
         // Status 200 but order not placed (e.g., orderbook does not exist)
         log(`  >>> Order NOT placed: ${errorMsg || 'unknown error'}`);
-        logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, false, undefined, errorMsg);
+        trackLatency(rawLatency, false, undefined, errorMsg);
         // Continue to C++ spam phase
       }
     } else {
       // Non-200 status
-      logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, false, undefined, rawResult);
+      trackLatency(rawLatency, false, undefined, rawResult);
     }
   } catch (err: any) {
     const rawLatency = Math.round(performance.now() - rawStart);
     log(`  Error: ${err.message}`);
-    logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, false, undefined, err.message);
+    trackLatency(rawLatency, false, undefined, err.message);
   }
 
   // ===== PHASE 4: Wait before spam =====
@@ -457,9 +449,9 @@ async function runTest(slug: string, marketTimestamp: number) {
 
           if (success) {
             log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${message}`);
-            logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), latency, true, message);
+            trackLatency(latency, true, message);
           } else {
-            logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), latency, false, undefined, message);
+            trackLatency(latency, false, undefined, message);
           }
         } else if (line.startsWith('WARMUP:')) {
           const warmup = parseInt(line.split(':')[1]);
@@ -491,9 +483,15 @@ async function runTest(slug: string, marketTimestamp: number) {
       log(`  Exit code: ${code}`);
       log(`  Total time: ${spamElapsed}s`);
 
-      // Write summary to CSV
-      writeSummary();
-      log(`Summary written to: ${LATENCY_SUMMARY_FILE}`);
+      // Write result to CSV (find the successful order if any)
+      const successRecord = latencyRecords.find(r => r.success);
+      if (successRecord) {
+        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), successRecord.latencyMs, true, successRecord.orderId);
+      } else if (latencyRecords.length > 0) {
+        const lastRecord = latencyRecords[latencyRecords.length - 1];
+        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), lastRecord.latencyMs, false);
+      }
+      log(`Result written to: ${LATENCY_LOG_FILE}`);
 
       log('='.repeat(60));
 
