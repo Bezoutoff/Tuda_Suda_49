@@ -31,7 +31,8 @@ const SUMMARY_HEADER = 'market_time,slug,total_attempts,success_count,first_succ
 
 // Test parameters
 const TEST_PRICE = 0.45;
-const TEST_EXPIRATION_BUFFER = 1; // 1 sec before market start
+// Get expiration buffer from ORDER_CONFIG for TEST_PRICE
+const TEST_EXPIRATION_BUFFER = BOT_CONFIG.ORDER_CONFIG.find(c => c.price === TEST_PRICE)?.expirationBuffer || 30;
 const MAX_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
 const INTERVAL_MS = 2;
 const DELAY_BEFORE_SPAM_MS = BOT_CONFIG.DELAY_BEFORE_SPAM_MS;
@@ -352,6 +353,10 @@ async function runTest(slug: string, marketTimestamp: number) {
   log(`  Timestamp: ${freshTime}`);
   log(`  Signature: ${rawSignature}`);
 
+  // Update server time before test
+  await updateServerTime();
+
+  const rawStart = performance.now();
   try {
     const rawResp = await fetch('https://clob.polymarket.com/orders', {
       method: 'POST',
@@ -365,17 +370,46 @@ async function runTest(slug: string, marketTimestamp: number) {
       },
       body: orderBody,
     });
+    const rawLatency = Math.round(performance.now() - rawStart);
     const rawResult = await rawResp.text();
     log(`  Status: ${rawResp.status}`);
+    log(`  Latency: ${rawLatency}ms`);
     log(`  Response: ${rawResult.slice(0, 200)}`);
 
     if (rawResp.status === 200) {
-      log('  >>> Raw HTTP works! Order placed.');
-      // Order was placed, skip C++ for this market
-      return;
+      // Parse order ID from response
+      let orderId = '';
+      let errorMsg = '';
+      try {
+        const parsed = JSON.parse(rawResult);
+        if (Array.isArray(parsed) && parsed[0]) {
+          orderId = parsed[0].orderID || '';
+          errorMsg = parsed[0].errorMsg || '';
+        }
+      } catch {}
+
+      // Check if order was actually placed (orderID not empty)
+      if (orderId) {
+        log('  >>> Raw HTTP works! Order placed.');
+        logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, true, orderId);
+        writeSummary();
+        log(`Summary written to: ${LATENCY_SUMMARY_FILE}`);
+        // Order was placed, skip C++ for this market
+        return;
+      } else {
+        // Status 200 but order not placed (e.g., orderbook does not exist)
+        log(`  >>> Order NOT placed: ${errorMsg || 'unknown error'}`);
+        logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, false, undefined, errorMsg);
+        // Continue to C++ spam phase
+      }
+    } else {
+      // Non-200 status
+      logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, false, undefined, rawResult);
     }
   } catch (err: any) {
+    const rawLatency = Math.round(performance.now() - rawStart);
     log(`  Error: ${err.message}`);
+    logLatency(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, false, undefined, err.message);
   }
 
   // ===== PHASE 4: Wait before spam =====

@@ -14,7 +14,8 @@
       "Bash(npm install:*)",
       "Bash(node -e:*)",
       "Bash(node:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []
