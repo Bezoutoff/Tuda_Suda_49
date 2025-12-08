@@ -433,7 +433,9 @@ async function runTest(slug: string, marketTimestamp: number) {
     let stderr = '';
 
     cpp.stdout.on('data', (data) => {
-      const lines = data.toString().split('\n');
+      const text = data.toString();
+      log(`[STDOUT] ${text.substring(0, 100)}...`);  // Debug
+      const lines = text.split('\n');
       for (const line of lines) {
         if (!line.trim()) continue;
 
