@@ -82,9 +82,23 @@ function shouldLog(success: boolean, error?: string): boolean {
 
 // Track latency for later aggregation
 function trackLatency(latencyMs: number, success: boolean, orderId?: string, error?: string) {
-  if (!shouldLog(success, error)) return;
+  log(`[trackLatency] ENTER: latencyMs=${latencyMs}, success=${success}, orderId=${orderId}, error=${error?.substring(0, 50)}`);
+  log(`[trackLatency] BEFORE: attemptCounter=${attemptCounter}, latencyRecords.length=${latencyRecords.length}`);
+
+  const shouldLogResult = shouldLog(success, error);
+  log(`[trackLatency] shouldLog returned: ${shouldLogResult}`);
+
+  if (!shouldLogResult) {
+    log(`[trackLatency] SKIPPED - shouldLog returned false`);
+    return;
+  }
+
   attemptCounter++;
-  latencyRecords.push({ latencyMs, success, attempt: attemptCounter, orderId });
+  const record = { latencyMs, success, attempt: attemptCounter, orderId };
+  latencyRecords.push(record);
+
+  log(`[trackLatency] AFTER: attemptCounter=${attemptCounter}, latencyRecords.length=${latencyRecords.length}`);
+  log(`[trackLatency] Added record: ${JSON.stringify(record)}`);
 }
 
 // Write final result to CSV (one row per market with all stats)
@@ -449,7 +463,7 @@ async function runTest(slug: string, marketTimestamp: number) {
           const success = parts[3] === 'true';
           const message = parts.slice(4).join(':');
 
-          log(`[PARSE] attempt=${attemptNum}, latency=${latency}, success=${success}`);
+          log(`[PARSE] attempt=${attemptNum}, latency=${latency}, success=${success}, message=${message.substring(0, 50)}`);
 
           if (success) {
             log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${message}`);
@@ -457,7 +471,6 @@ async function runTest(slug: string, marketTimestamp: number) {
           } else {
             trackLatency(latency, false, undefined, message);
           }
-          log(`[TRACK] latencyRecords.length = ${latencyRecords.length}`);
         } else if (line.startsWith('WARMUP:')) {
           const warmup = parseInt(line.split(':')[1]);
           log(`TLS warm-up: ${warmup}ms`);
