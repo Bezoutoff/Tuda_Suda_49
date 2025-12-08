@@ -449,12 +449,15 @@ async function runTest(slug: string, marketTimestamp: number) {
           const success = parts[3] === 'true';
           const message = parts.slice(4).join(':');
 
+          log(`[PARSE] attempt=${attemptNum}, latency=${latency}, success=${success}`);
+
           if (success) {
             log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${message}`);
             trackLatency(latency, true, message);
           } else {
             trackLatency(latency, false, undefined, message);
           }
+          log(`[TRACK] latencyRecords.length = ${latencyRecords.length}`);
         } else if (line.startsWith('WARMUP:')) {
           const warmup = parseInt(line.split(':')[1]);
           log(`TLS warm-up: ${warmup}ms`);
