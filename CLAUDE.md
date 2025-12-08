@@ -325,8 +325,110 @@ npm run build:cpp
 npm run test-latency-cpp btc-updown-15m-<TIMESTAMP>
 ```
 
+## Визуализация Latency (Python)
+
+### Файл: `scripts/plot_latency.py`
+
+Скрипт для построения графиков latency на основе `latency.csv`.
+
+**Установка зависимостей:**
+```bash
+pip install pandas matplotlib
+```
+
+**Запуск:**
+```bash
+python scripts/plot_latency.py latency.csv
+```
+
+**Функции:**
+- Загружает CSV с результатами latency тестов
+- Строит график latency во времени с точными значениями (мс) над каждой точкой
+- Показывает время в формате HH:MM:SS.mmm на оси X
+- Строит гистограмму распределения latency
+- Выводит статистику: min, max, mean, median, std, P95, P99
+- Сохраняет PNG файл
+- Тёмная тема
+
+**Выходные файлы:**
+- `latency_plot.png` — графики latency
+
+## Troubleshooting (Расширенный)
+
+### C++ Latency Test: latencyRecords.length = 0
+
+**Проблема:** В логах `[TRACK] latencyRecords.length = 0` даже после вызова `trackLatency()`.
+
+**Причина:** Функция `shouldLog()` возвращала `false` для ошибок с сообщением "the orderbook ... does not exist" — проверка `error?.includes('does not exist')` не срабатывала из-за другого формата сообщения.
+
+**Решение:** Изменить `shouldLog()` чтобы логировать все попытки:
+```typescript
+function shouldLog(success: boolean, error?: string): boolean {
+  if (success) return true;
+  if (error?.includes('does not exist')) return true;
+  return true;  // Log all attempts
+}
+```
+
+### C++ stdout не доходит до Node.js
+
+**Проблема:** ATTEMPT: строки из C++ не появлялись в Node.js.
+
+**Причина:** C++ stdout буферизуется, данные не сбрасываются сразу.
+
+**Решение:** Добавить `std::cout.flush()` после каждого вывода в C++:
+```cpp
+std::cout << "ATTEMPT:" << attempts << ":" << latencyMs << ":true:" << orderId << std::endl;
+std::cout.flush();
+```
+
+### Ордер не отображается на Polymarket
+
+**Проблема:** Лог показывает успех (status 200), но ордер не виден.
+
+**Причина:** Expiration был в прошлом относительно времени отправки. Ордер мгновенно истекал.
+
+**Решение:** Использовать `expirationBuffer` из `ORDER_CONFIG` вместо захардкоженного значения:
+```typescript
+const expirationTimestamp = marketTimestamp - TEST_EXPIRATION_BUFFER;
+```
+
+### Status 200 но orderID пустой
+
+**Проблема:** HTTP 200 OK, но в ответе `orderID: ""` и ордер не поставлен.
+
+**Причина:** Код проверял только `status === 200`, но не проверял что `orderID` не пустой. Сервер возвращает 200 даже когда orderbook не существует.
+
+**Решение:** Добавить проверку `orderID`:
+```typescript
+if (rawResp.status === 200) {
+  const parsed = JSON.parse(rawResult);
+  const orderId = parsed[0]?.orderID || '';
+  if (orderId) {
+    // Успех - ордер реально поставлен
+  } else {
+    // Orderbook не существует
+  }
+}
+```
+
+### CSV: разное количество колонок
+
+**Проблема:** pandas не может прочитать CSV с разным количеством колонок (старый формат 12, новый 19).
+
+**Решение:** Читать по позиции колонок:
+```python
+df = pd.read_csv(csv_path, header=None, skiprows=1,
+                 usecols=[0, 7, 8],
+                 names=['server_time_ms', 'latency_ms', 'status'])
+```
+
 ## История
 
+- **2025-12-08**: Python визуализация latency (plot_latency.py), тёмная тема, подписи значений
+- **2025-12-08**: Fix latencyRecords tracking - shouldLog() теперь логирует все попытки
+- **2025-12-08**: Fix C++ stdout buffering - добавлен flush()
+- **2025-12-08**: Fix expiration - использование ORDER_CONFIG.expirationBuffer
 - **2025-12-05**: C++ latency test — Auth работает! (fix: wallet addr, underscore headers, URL-safe base64)
 - **2025-12-04**: Добавлен test-latency.ts для измерения latency
 - **2025-12-03**: 10 ордеров с индивидуальными expiration times
