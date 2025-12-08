@@ -76,8 +76,8 @@ function getServerTimeMs(): number {
 // Check if should log this result
 function shouldLog(success: boolean, error?: string): boolean {
   if (success) return true;
-  if (error?.includes('orderbook does not exist')) return true;
-  return false;
+  if (error?.includes('does not exist')) return true;
+  return true;  // Log all attempts for now
 }
 
 // Track latency for later aggregation
