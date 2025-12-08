@@ -82,23 +82,9 @@ function shouldLog(success: boolean, error?: string): boolean {
 
 // Track latency for later aggregation
 function trackLatency(latencyMs: number, success: boolean, orderId?: string, error?: string) {
-  log(`[trackLatency] ENTER: latencyMs=${latencyMs}, success=${success}, orderId=${orderId}, error=${error?.substring(0, 50)}`);
-  log(`[trackLatency] BEFORE: attemptCounter=${attemptCounter}, latencyRecords.length=${latencyRecords.length}`);
-
-  const shouldLogResult = shouldLog(success, error);
-  log(`[trackLatency] shouldLog returned: ${shouldLogResult}`);
-
-  if (!shouldLogResult) {
-    log(`[trackLatency] SKIPPED - shouldLog returned false`);
-    return;
-  }
-
+  if (!shouldLog(success, error)) return;
   attemptCounter++;
-  const record = { latencyMs, success, attempt: attemptCounter, orderId };
-  latencyRecords.push(record);
-
-  log(`[trackLatency] AFTER: attemptCounter=${attemptCounter}, latencyRecords.length=${latencyRecords.length}`);
-  log(`[trackLatency] Added record: ${JSON.stringify(record)}`);
+  latencyRecords.push({ latencyMs, success, attempt: attemptCounter, orderId });
 }
 
 // Write final result to CSV (one row per market with all stats)
@@ -448,7 +434,6 @@ async function runTest(slug: string, marketTimestamp: number) {
 
     cpp.stdout.on('data', (data) => {
       const text = data.toString();
-      log(`[STDOUT] ${text.substring(0, 100)}...`);  // Debug
       const lines = text.split('\n');
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -462,8 +447,6 @@ async function runTest(slug: string, marketTimestamp: number) {
           const latency = parseInt(parts[2]);
           const success = parts[3] === 'true';
           const message = parts.slice(4).join(':');
-
-          log(`[PARSE] attempt=${attemptNum}, latency=${latency}, success=${success}, message=${message.substring(0, 50)}`);
 
           if (success) {
             log(`#${attemptNum}: ${latency}ms - SUCCESS! Order: ${message}`);
