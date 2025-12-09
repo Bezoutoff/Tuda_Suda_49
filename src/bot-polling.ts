@@ -165,13 +165,14 @@ async function spamOrdersUntilSuccess(
   const startTime = Date.now();
   let totalAttempts = 0;
   const STREAM_INTERVAL_MS = 5;
+  const inFlightRequests: Promise<void>[] = [];
 
   log(`Stream spam: sending requests every ${STREAM_INTERVAL_MS}ms`);
 
   // Helper function to send one request for an order
   const sendRequest = (order: typeof signedOrders[0]) => {
     totalAttempts++;
-    tradingService.postSignedOrder(order.signedOrder, order.expirationTimestamp)
+    const promise = tradingService.postSignedOrder(order.signedOrder, order.expirationTimestamp)
       .then(result => {
         if (!order.placed) {
           order.placed = true;
@@ -181,6 +182,7 @@ async function spamOrdersUntilSuccess(
         }
       })
       .catch(() => {});
+    inFlightRequests.push(promise);
   };
 
   // Stream loop - round-robin through pending orders
@@ -204,6 +206,10 @@ async function spamOrdersUntilSuccess(
       log(`Progress: ${placedCount}/${signedOrders.length} placed, ${totalAttempts} attempts, ${elapsed}s`);
     }
   }
+
+  // Wait for all in-flight requests to complete
+  log(`Waiting for ${inFlightRequests.length} in-flight requests...`);
+  await Promise.all(inFlightRequests);
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);
   const placedCount = signedOrders.filter(o => o.placed).length;
