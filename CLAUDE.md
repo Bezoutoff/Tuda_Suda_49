@@ -423,8 +423,25 @@ df = pd.read_csv(csv_path, header=None, skiprows=1,
                  names=['server_time_ms', 'latency_ms', 'status'])
 ```
 
+### Polymarket добавляет +60 сек к expiration
+
+**Проблема:** Ордер закрывается за 90 сек до старта вместо ожидаемых 30 сек.
+
+**Причина:** Polymarket автоматически добавляет +60 секунд к значению expiration при создании GTD ордера.
+
+**Решение:** Вычитать 60 из желаемого значения expirationBuffer:
+```typescript
+// Хотим: 30 сек до старта
+// PM добавит +60, получится: 30+60 = 90 сек до старта
+// Поэтому ставим: 30-60 = -30
+{ price: 0.45, size: 10, expirationBuffer: -30 },  // 30 сек до старта
+```
+
+**Формула:** `expirationBuffer = желаемое_время_до_старта - 60`
+
 ## История
 
+- **2025-12-09**: Fix expirationBuffer - учёт +60 сек от Polymarket
 - **2025-12-08**: Python визуализация latency (plot_latency.py), тёмная тема, подписи значений
 - **2025-12-08**: Fix latencyRecords tracking - shouldLog() теперь логирует все попытки
 - **2025-12-08**: Fix C++ stdout buffering - добавлен flush()
