@@ -30,10 +30,10 @@ export const BOT_CONFIG = {
   // Polling intervals (bot-polling.ts)
   POLL_INTERVAL_MS: 250,        // Интервал между запросами к Gamma API
   ORDER_RETRY_INTERVAL_MS: 1,   // Интервал между попытками ордеров
-  MAX_ORDER_ATTEMPTS: 5000,     // Максимум попыток
+  MAX_ORDER_ATTEMPTS: 2000,     // Максимум попыток
   START_POLLING_BEFORE_MS: 60000, // Начать polling за 60 секунд до времени
   POLL_TIMEOUT_MS: 20 * 60 * 1000, // Таймаут polling
-  DELAY_BEFORE_SPAM_MS: 23500,  // Задержка между получением tokenID и началом спама
+  DELAY_BEFORE_SPAM_MS: 23000,  // Задержка между получением tokenID и началом спама
   PARALLEL_SPAM_REQUESTS: 20,   // Кол-во параллельных запросов на ордер (10 ордеров × 20 = 200 req/s, лимит 240)
 
   // Logging prefix

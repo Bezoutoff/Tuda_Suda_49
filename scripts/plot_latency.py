@@ -26,10 +26,10 @@ def main():
         sys.exit(1)
 
     # Read CSV - columns are positional, header may not match data
-    # Columns: server_time_ms(0), latency_ms(7), status(8), min_ms(14), max_ms(15)
+    # Columns: server_time_ms(0), latency_ms(7), status(8), total_attempts(11), min_ms(14), max_ms(15)
     df = pd.read_csv(csv_path, header=None, skiprows=1,
-                     usecols=[0, 7, 8, 14, 15],
-                     names=['server_time_ms', 'latency_ms', 'status', 'min_ms', 'max_ms'])
+                     usecols=[0, 7, 8, 11, 14, 15],
+                     names=['server_time_ms', 'latency_ms', 'status', 'total_attempts', 'min_ms', 'max_ms'])
     print(f"Loaded {len(df)} records from {csv_path}")
 
     # Convert server_time_ms to datetime
@@ -80,13 +80,14 @@ def main():
 
     # Add labels for each point
     for i, (idx, row) in enumerate(success_df.iterrows()):
-        # Success latency label (above point)
-        ax1.annotate(f"{int(row['latency_ms'])}",
+        # Success latency label with attempts count (above point)
+        attempts = int(row['total_attempts']) if pd.notna(row['total_attempts']) else 0
+        ax1.annotate(f"{int(row['latency_ms'])}ms\n({attempts})",
                      (i, row['latency_ms']),
                      textcoords="offset points",
-                     xytext=(0, 10),
+                     xytext=(0, 12),
                      ha='center',
-                     fontsize=8,
+                     fontsize=7,
                      fontweight='bold',
                      color='white')
         # Min label (below min point)
