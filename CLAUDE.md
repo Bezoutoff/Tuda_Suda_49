@@ -423,6 +423,27 @@ df = pd.read_csv(csv_path, header=None, skiprows=1,
                  names=['server_time_ms', 'latency_ms', 'status'])
 ```
 
+### Stream spam: не все ордера ставятся
+
+**Проблема:** При stream спаме ставятся только 6-9 ордеров из 10, случайные ордера пропускаются.
+
+**Причина:** `sendRequest()` не ждёт ответа — запросы "в полёте" когда цикл уже завершается. Некоторые ответы приходят после выхода из цикла.
+
+**Решение:** Сохранять все промисы и ждать их в конце:
+```typescript
+const inFlightRequests: Promise<void>[] = [];
+
+const sendRequest = (order) => {
+  const promise = tradingService.postSignedOrder(...)
+    .then(result => { order.placed = true; })
+    .catch(() => {});
+  inFlightRequests.push(promise);  // Сохраняем промис
+};
+
+// После цикла - ждём все запросы
+await Promise.all(inFlightRequests);
+```
+
 ### Polymarket добавляет +60 сек к expiration
 
 **Проблема:** Ордер закрывается за 90 сек до старта вместо ожидаемых 30 сек.
