@@ -161,39 +161,44 @@ async function spamOrdersUntilSuccess(
     await new Promise(resolve => setTimeout(resolve, delayMs));
   }
 
-  // SPAM: все 10 ордеров параллельно, пока все не пройдут
+  // SPAM: stream mode - send requests every 5ms
   const startTime = Date.now();
   let totalAttempts = 0;
+  const STREAM_INTERVAL_MS = 5;
 
-  log(`Parallel spam: ${PARALLEL} concurrent requests per order`);
+  log(`Stream spam: sending requests every ${STREAM_INTERVAL_MS}ms`);
 
+  // Helper function to send one request for an order
+  const sendRequest = (order: typeof signedOrders[0]) => {
+    totalAttempts++;
+    tradingService.postSignedOrder(order.signedOrder, order.expirationTimestamp)
+      .then(result => {
+        if (!order.placed) {
+          order.placed = true;
+          order.orderId = result.orderId;
+          const placedCount = signedOrders.filter(o => o.placed).length;
+          log(`${order.side} @ ${order.price} placed: ${result.orderId} (${placedCount}/${signedOrders.length})`);
+        }
+      })
+      .catch(() => {});
+  };
+
+  // Stream loop - round-robin through pending orders
+  let orderIndex = 0;
   while (signedOrders.some(o => !o.placed) && totalAttempts < MAX_ORDER_ATTEMPTS * signedOrders.length) {
     const pending = signedOrders.filter(o => !o.placed);
-    const promises: Promise<any>[] = [];
+    if (pending.length === 0) break;
 
-    // Для каждого непроставленного ордера запускаем PARALLEL попыток
-    for (const order of pending) {
-      for (let i = 0; i < PARALLEL; i++) {
-        totalAttempts++;
-        promises.push(
-          tradingService.postSignedOrder(order.signedOrder, order.expirationTimestamp)
-            .then(result => {
-              if (!order.placed) {
-                order.placed = true;
-                order.orderId = result.orderId;
-                const placedCount = signedOrders.filter(o => o.placed).length;
-                log(`${order.side} @ ${order.price} placed: ${result.orderId} (${placedCount}/${signedOrders.length})`);
-              }
-            })
-            .catch(() => {})
-        );
-      }
-    }
+    // Round-robin: pick next pending order
+    const order = pending[orderIndex % pending.length];
+    sendRequest(order);
+    orderIndex++;
 
-    await Promise.all(promises);
+    // Wait 5ms before next request
+    await new Promise(r => setTimeout(r, STREAM_INTERVAL_MS));
 
-    // Логируем прогресс каждые 1000 попыток
-    if (totalAttempts % 1000 === 0) {
+    // Log progress every 500 attempts
+    if (totalAttempts % 500 === 0) {
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       const placedCount = signedOrders.filter(o => o.placed).length;
       log(`Progress: ${placedCount}/${signedOrders.length} placed, ${totalAttempts} attempts, ${elapsed}s`);
