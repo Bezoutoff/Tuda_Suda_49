@@ -185,19 +185,17 @@ async function spamOrdersUntilSuccess(
     inFlightRequests.push(promise);
   };
 
-  // Stream loop - round-robin through pending orders
-  let orderIndex = 0;
+  // Stream loop - cycle through ALL orders, skip already placed
   while (signedOrders.some(o => !o.placed) && totalAttempts < MAX_ORDER_ATTEMPTS * signedOrders.length) {
-    const pending = signedOrders.filter(o => !o.placed);
-    if (pending.length === 0) break;
+    // Iterate through all orders each round
+    for (const order of signedOrders) {
+      if (order.placed) continue;  // Skip already placed
 
-    // Round-robin: pick next pending order
-    const order = pending[orderIndex % pending.length];
-    sendRequest(order);
-    orderIndex++;
+      sendRequest(order);
 
-    // Wait 5ms before next request
-    await new Promise(r => setTimeout(r, STREAM_INTERVAL_MS));
+      // Wait 5ms before next request
+      await new Promise(r => setTimeout(r, STREAM_INTERVAL_MS));
+    }
 
     // Log progress every 500 attempts
     if (totalAttempts % 500 === 0) {
