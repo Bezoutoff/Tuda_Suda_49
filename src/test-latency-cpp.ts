@@ -28,7 +28,7 @@ const CPP_BINARY = path.join(__dirname, '..', 'dist', 'test-latency-cpp');
 const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,side,price,size,latency_ms,status,order_id,attempt,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source\n';
 
 // Test parameters
-const TEST_PRICE = 0.45;
+const TEST_PRICE = 0.44;
 // Get expiration buffer from ORDER_CONFIG for TEST_PRICE
 const TEST_EXPIRATION_BUFFER = BOT_CONFIG.ORDER_CONFIG.find(c => c.price === TEST_PRICE)?.expirationBuffer || 30;
 const MAX_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
