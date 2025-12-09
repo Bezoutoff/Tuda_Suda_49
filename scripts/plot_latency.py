@@ -26,10 +26,10 @@ def main():
         sys.exit(1)
 
     # Read CSV - columns are positional, header may not match data
-    # Columns: server_time_ms(0), latency_ms(7), status(8)
+    # Columns: server_time_ms(0), latency_ms(7), status(8), min_ms(14), max_ms(15)
     df = pd.read_csv(csv_path, header=None, skiprows=1,
-                     usecols=[0, 7, 8],
-                     names=['server_time_ms', 'latency_ms', 'status'])
+                     usecols=[0, 7, 8, 14, 15],
+                     names=['server_time_ms', 'latency_ms', 'status', 'min_ms', 'max_ms'])
     print(f"Loaded {len(df)} records from {csv_path}")
 
     # Convert server_time_ms to datetime
@@ -57,24 +57,54 @@ def main():
     print(f"  P99:     {latency.quantile(0.99):.0f} ms")
     print("=" * 40)
 
-    # Create figure with 2 subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(max(14, len(success_df) * 0.5), 10))
+    # Create figure with 2 subplots (main plot 4x taller than histogram)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(max(14, len(success_df) * 0.5), 20),
+                                    gridspec_kw={'height_ratios': [4, 1]})
 
     # Plot 1: Latency over time with labels
     # Use index for x-axis to show each point separately
-    x_positions = range(len(success_df))
-    ax1.plot(x_positions, success_df['latency_ms'].values,
-             marker='o', markersize=8, linestyle='-', linewidth=0.5, alpha=0.7)
+    x_positions = list(range(len(success_df)))
 
-    # Add latency value label for each point
+    # Plot min_ms points (cyan, bottom)
+    ax1.scatter(x_positions, success_df['min_ms'].values,
+                marker='v', s=50, color='cyan', alpha=0.8, label='Min', zorder=2)
+
+    # Plot max_ms points (orange, top)
+    ax1.scatter(x_positions, success_df['max_ms'].values,
+                marker='^', s=50, color='orange', alpha=0.8, label='Max', zorder=2)
+
+    # Plot success latency points (blue, main)
+    ax1.plot(x_positions, success_df['latency_ms'].values,
+             marker='o', markersize=8, linestyle='-', linewidth=0.5, alpha=0.9,
+             color='#1f77b4', label='Success', zorder=3)
+
+    # Add labels for each point
     for i, (idx, row) in enumerate(success_df.iterrows()):
+        # Success latency label (above point)
         ax1.annotate(f"{int(row['latency_ms'])}",
                      (i, row['latency_ms']),
                      textcoords="offset points",
-                     xytext=(0, 8),
+                     xytext=(0, 10),
                      ha='center',
                      fontsize=8,
-                     fontweight='bold')
+                     fontweight='bold',
+                     color='white')
+        # Min label (below min point)
+        ax1.annotate(f"{int(row['min_ms'])}",
+                     (i, row['min_ms']),
+                     textcoords="offset points",
+                     xytext=(0, -12),
+                     ha='center',
+                     fontsize=7,
+                     color='cyan')
+        # Max label (above max point)
+        ax1.annotate(f"{int(row['max_ms'])}",
+                     (i, row['max_ms']),
+                     textcoords="offset points",
+                     xytext=(0, 8),
+                     ha='center',
+                     fontsize=7,
+                     color='orange')
 
     ax1.axhline(y=latency.mean(), color='r', linestyle='--', label=f'Mean: {latency.mean():.0f}ms')
     ax1.axhline(y=latency.median(), color='g', linestyle='--', label=f'Median: {latency.median():.0f}ms')
@@ -87,9 +117,9 @@ def main():
 
     ax1.set_xlabel('Time (HH:MM:SS.ms)')
     ax1.set_ylabel('Latency (ms)')
-    ax1.set_title('API Latency Over Time (values in ms)')
+    ax1.set_title(f'API Latency Over Time | Count: {len(latency)} | Min: {latency.min()}ms | Max: {latency.max()}ms | Mean: {latency.mean():.0f}ms')
     ax1.grid(True, alpha=0.3)
-    ax1.legend()
+    ax1.legend(loc='upper right')
     ax1.margins(x=0.02)
 
     # Plot 2: Histogram
