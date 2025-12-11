@@ -30,5 +30,19 @@ echo "Slug: $SLUG"
 echo "Market time: $(date -d @$TIMESTAMP '+%Y-%m-%d %H:%M:%S')"
 echo "================================================"
 
+# Найти ts-node (попробовать разные пути)
+if command -v ts-node >/dev/null 2>&1; then
+  TS_NODE="ts-node"
+elif [ -f "./node_modules/.bin/ts-node" ]; then
+  TS_NODE="./node_modules/.bin/ts-node"
+elif command -v npx >/dev/null 2>&1; then
+  TS_NODE="npx ts-node"
+else
+  echo "ERROR: ts-node not found. Install it: npm install -g ts-node"
+  exit 1
+fi
+
+echo "Using: $TS_NODE"
+
 # Запуск бота
-exec ts-node src/updown-bot-cpp/updown-bot-cpp.ts "$SLUG"
+exec $TS_NODE src/updown-bot-cpp/updown-bot-cpp.ts "$SLUG"

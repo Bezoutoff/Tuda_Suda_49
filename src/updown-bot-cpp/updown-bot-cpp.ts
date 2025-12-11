@@ -543,14 +543,24 @@ async function main() {
   }
 
   // Extract pattern and timestamp from slug
-  const match = slug.match(/^(.+)-(\d+)$/);
+  const match = slug.match(/^(.+)-(\d+|AUTO)$/);
   if (!match) {
-    console.log('ERROR: Invalid slug format. Expected: xxx-updown-15m-TIMESTAMP');
+    console.log('ERROR: Invalid slug format. Expected: xxx-updown-15m-TIMESTAMP or xxx-updown-15m-AUTO');
     process.exit(1);
   }
 
   const pattern = match[1]; // e.g., "btc-updown-15m"
-  let marketTimestamp = parseInt(match[2]);
+  let marketTimestamp: number;
+
+  // Auto-calculate next market timestamp if "AUTO"
+  if (match[2] === 'AUTO') {
+    const now = Math.floor(Date.now() / 1000);
+    const remainder = now % INTERVAL_SECONDS;
+    marketTimestamp = now + (INTERVAL_SECONDS - remainder);
+    log(`Auto mode: Starting from next market at ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
+  } else {
+    marketTimestamp = parseInt(match[2]);
+  }
 
   // Continuous loop
   while (true) {

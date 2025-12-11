@@ -14,9 +14,9 @@ module.exports = {
   apps: [
     {
       name: 'updown-cpp',
-      script: './start-updown-bot.sh',
+      script: './node_modules/.bin/ts-node',
+      args: 'src/updown-bot-cpp/updown-bot-cpp.ts btc-updown-15m-AUTO',
       cwd: '/root/Tuda_Suda_49',
-      interpreter: 'bash',
       instances: 1,
       autorestart: true,
       watch: false,
