@@ -11,7 +11,10 @@
 import TelegramBot from 'node-telegram-bot-api';
 import * as dotenv from 'dotenv';
 import { TelegramAuth, RateLimiter, AuditLogger, ConfirmationManager } from './auth';
-import { MessageContext } from './types';
+import { getStatusMonitor } from './monitor';
+import { getUpdownBotCSV } from './csv-reader';
+import * as formatters from './formatters';
+import { MessageContext, BotName } from './types';
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +28,8 @@ class TudaSudaBot {
   private rateLimiter: RateLimiter;
   private auditLogger: AuditLogger;
   private confirmationManager: ConfirmationManager;
+  private statusMonitor = getStatusMonitor();
+  private csvReader = getUpdownBotCSV();
 
   constructor() {
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -51,6 +56,9 @@ class TudaSudaBot {
     // Register command handlers
     this.bot.onText(/\/start/, (msg) => this.handleMessage(msg, this.handleStart.bind(this)));
     this.bot.onText(/\/help/, (msg) => this.handleMessage(msg, this.handleHelp.bind(this)));
+    this.bot.onText(/\/status(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleStatus(msg, match)));
+    this.bot.onText(/\/logs (.+)/, (msg, match) => this.handleMessage(msg, () => this.handleLogs(msg, match)));
+    this.bot.onText(/\/orders(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleOrders(msg, match)));
 
     // Handle all text messages (for confirmations, etc.)
     this.bot.on('message', (msg) => {
@@ -220,6 +228,75 @@ All commands are logged to audit log with timestamp, user ID, and parameters.
     `.trim();
 
     await ctx.bot.sendMessage(ctx.chatId, helpMsg, { parse_mode: 'Markdown' });
+  }
+
+  /**
+   * Handle /status command
+   */
+  private async handleStatus(msg: TelegramBot.Message, match: RegExpExecArray | null): Promise<void> {
+    const chatId = msg.chat.id;
+    const args = match?.[1]?.trim();
+
+    try {
+      if (args) {
+        // Specific bot status
+        const botName = args as BotName;
+        const status = await this.statusMonitor.getBotStatus(botName);
+        const formatted = formatters.formatBotStatus(status);
+        await this.bot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+      } else {
+        // System status (all bots)
+        const systemStatus = await this.statusMonitor.getSystemStatus();
+        const formatted = formatters.formatSystemStatus(systemStatus);
+        await this.bot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await this.bot.sendMessage(chatId, formatters.formatError(`Failed to get status: ${errorMsg}`));
+    }
+  }
+
+  /**
+   * Handle /logs command
+   */
+  private async handleLogs(msg: TelegramBot.Message, match: RegExpExecArray | null): Promise<void> {
+    const chatId = msg.chat.id;
+    const args = match?.[1]?.trim().split(/\s+/) || [];
+
+    if (args.length === 0) {
+      await this.bot.sendMessage(chatId, formatters.formatError('Usage: /logs <bot> [lines]'));
+      return;
+    }
+
+    const botName = args[0] as BotName;
+    const lineCount = args[1] ? parseInt(args[1]) : 50;
+
+    try {
+      const logs = await this.statusMonitor.getBotLogs(botName, lineCount);
+      const formatted = formatters.formatLogs(logs, botName, lineCount);
+      await this.bot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await this.bot.sendMessage(chatId, formatters.formatError(`Failed to get logs: ${errorMsg}`));
+    }
+  }
+
+  /**
+   * Handle /orders command
+   */
+  private async handleOrders(msg: TelegramBot.Message, match: RegExpExecArray | null): Promise<void> {
+    const chatId = msg.chat.id;
+    const args = match?.[1]?.trim();
+    const count = args ? parseInt(args) : 20;
+
+    try {
+      const orders = this.csvReader.readRecentOrders(count);
+      const formatted = formatters.formatRecentOrders(orders, count);
+      await this.bot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await this.bot.sendMessage(chatId, formatters.formatError(`Failed to get orders: ${errorMsg}`));
+    }
   }
 
   /**
