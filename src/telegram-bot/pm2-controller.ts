@@ -73,7 +73,7 @@ export class PM2Controller {
             cpu: proc.monit?.cpu || 0,
             memory: proc.monit?.memory || 0,
             restarts: proc.pm2_env?.restart_time || 0,
-            exitCode: proc.pm2_env?.exit_code,
+            exitCode: (proc.pm2_env as any)?.exit_code,
           };
         });
 
