@@ -10,8 +10,13 @@ get_next_market() {
   echo $next
 }
 
-# Если передан аргумент - используем его, иначе вычисляем автоматически
-if [ -n "$1" ]; then
+# Приоритеты:
+# 1. Переменная окружения MARKET_TIMESTAMP (для PM2)
+# 2. Аргумент командной строки $1
+# 3. Автоматическое вычисление
+if [ -n "$MARKET_TIMESTAMP" ]; then
+  TIMESTAMP=$MARKET_TIMESTAMP
+elif [ -n "$1" ]; then
   TIMESTAMP=$1
 else
   TIMESTAMP=$(get_next_market)
