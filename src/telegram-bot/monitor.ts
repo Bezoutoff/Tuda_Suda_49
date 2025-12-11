@@ -49,7 +49,8 @@ export class StatusMonitor {
         // Try to read CSV data
         if (this.updownCSV.exists()) {
           performance = this.updownCSV.getRecentPerformance(60); // Last 60 minutes
-          latestMarket = this.updownCSV.getLatestMarket();
+          const market = this.updownCSV.getLatestMarket();
+          latestMarket = market || undefined; // Convert null to undefined
         } else {
           errors.push('CSV log file not found');
         }
