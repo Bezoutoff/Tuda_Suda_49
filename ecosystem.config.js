@@ -73,5 +73,25 @@ module.exports = {
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
+
+    {
+      name: 'telegram-bot',
+      script: './node_modules/.bin/ts-node',
+      args: 'src/telegram-bot/telegram-bot.ts',
+      cwd: '/root/Tuda_Suda_49',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: './logs/telegram-bot-error.log',
+      out_file: './logs/telegram-bot-out.log',
+      log_file: './logs/telegram-bot-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
   ],
 };
