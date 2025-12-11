@@ -260,7 +260,10 @@ Your role: ${roleDisplay}
     helpMsg += `
 
 *Bot Names:*
-• \`updown-cpp\` - C++ latency bot (main)
+• \`updown-btc\` - BTC 15m C++ bot
+• \`updown-eth\` - ETH 15m C++ bot
+• \`updown-sol\` - SOL 15m C++ bot
+• \`updown-xrp\` - XRP 15m C++ bot
 • \`updown-polling\` - Polling-based bot
 • \`updown-ws\` - WebSocket-based bot
 • \`telegram-bot\` - This control bot

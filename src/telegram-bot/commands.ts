@@ -38,7 +38,7 @@ export class CommandHandlers {
     const botName = args[0] as BotName;
 
     // Validate bot name
-    const validBots: BotName[] = ['updown-cpp', 'updown-polling', 'updown-ws', 'telegram-bot'];
+    const validBots: BotName[] = ['updown-btc', 'updown-eth', 'updown-sol', 'updown-xrp', 'updown-polling', 'updown-ws', 'telegram-bot'];
     if (!validBots.includes(botName)) {
       await bot.sendMessage(
         chatId,
@@ -87,7 +87,7 @@ export class CommandHandlers {
     const botName = args[0] as BotName;
 
     // Validate bot name
-    const validBots: BotName[] = ['updown-cpp', 'updown-polling', 'updown-ws', 'telegram-bot'];
+    const validBots: BotName[] = ['updown-btc', 'updown-eth', 'updown-sol', 'updown-xrp', 'updown-polling', 'updown-ws', 'telegram-bot'];
     if (!validBots.includes(botName)) {
       await bot.sendMessage(
         chatId,

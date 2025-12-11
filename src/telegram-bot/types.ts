@@ -8,7 +8,7 @@ import TelegramBot from 'node-telegram-bot-api';
 export type UserRole = 'admin' | 'user' | 'unauthorized';
 
 // Bot names
-export type BotName = 'updown-cpp' | 'updown-polling' | 'updown-ws' | 'telegram-bot';
+export type BotName = 'updown-btc' | 'updown-eth' | 'updown-sol' | 'updown-xrp' | 'updown-polling' | 'updown-ws' | 'telegram-bot';
 
 // Process status from PM2
 export interface ProcessStatus {

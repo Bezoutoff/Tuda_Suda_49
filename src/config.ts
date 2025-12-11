@@ -21,7 +21,9 @@ export const BOT_CONFIG = {
     { price: 0.47, size: 8,  expirationBuffer: 300 },  // 6 мин до старта (360-60)
     { price: 0.46, size: 9,  expirationBuffer: 60 },   // 2 мин до старта (120-60)
     { price: 0.45, size: 10, expirationBuffer: -30 },  // 30 сек до старта (30-60)
-    { price: 0.44, size: 10, expirationBuffer: -59 },  // 1 сек до старта (1-60)
+    { price: 0.44, size: 10, expirationBuffer: -58 },  // 1 сек до старта (1-60)
+    { price: 0.43, size: 10, expirationBuffer: -58 },  // 1 сек до старта (1-60)
+    { price: 0.42, size: 10, expirationBuffer: -58 },  // 1 сек до старта (1-60)
   ],
 
   // Default order size (can be overridden by BOT_ORDER_SIZE env var)
@@ -33,7 +35,7 @@ export const BOT_CONFIG = {
   MAX_ORDER_ATTEMPTS: 2000,     // Максимум попыток
   START_POLLING_BEFORE_MS: 60000, // Начать polling за 60 секунд до времени
   POLL_TIMEOUT_MS: 20 * 60 * 1000, // Таймаут polling
-  DELAY_BEFORE_SPAM_MS: 23000,  // Задержка между получением tokenID и началом спама
+  DELAY_BEFORE_SPAM_MS: 22500,  // Задержка между получением tokenID и началом спама
   PARALLEL_SPAM_REQUESTS: 20,   // Кол-во параллельных запросов на ордер (10 ордеров × 20 = 200 req/s, лимит 240)
 
   // Logging prefix
