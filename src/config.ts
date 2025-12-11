@@ -38,6 +38,15 @@ export const BOT_CONFIG = {
 
   // Logging prefix
   LOG_PREFIX: '[UPDOWN-BOT]',
+
+  // C++ mode configuration (updown-bot-cpp)
+  CPP_MODE: {
+    ENABLED: true,
+    MAX_ATTEMPTS_PER_ORDER: 500,  // Lower than polling bot (500 vs 2000)
+    INTERVAL_MS: 1,
+    BINARY_PATH: require('path').join(__dirname, '..', 'dist', 'updown-bot-cpp'),
+    CSV_LOG: require('path').join(__dirname, '..', 'updown-bot.csv'),
+  },
 };
 
 // Trading configuration (from .env)

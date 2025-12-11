@@ -13,7 +13,12 @@
     "bot-fast": "node dist/bot-polling.js",
     "test-latency": "ts-node src/test-latency.ts",
     "test-latency-cpp": "ts-node src/test-latency-cpp.ts",
-    "build:cpp": "bash build-cpp.sh"
+    "build:cpp": "bash build-cpp.sh",
+    "updown-bot": "ts-node src/updown-bot-cpp/updown-bot-cpp.ts",
+    "build:updown-bot": "bash build-updown-bot.sh",
+    "build:all-cpp": "npm run build:cpp && npm run build:updown-bot",
+    "fill-timestamps": "ts-node scripts/fill-accepting-timestamp.ts",
+    "analyze-timing": "ts-node scripts/analyze-timing.ts"
   },
   "repository": {
     "type": "git",
