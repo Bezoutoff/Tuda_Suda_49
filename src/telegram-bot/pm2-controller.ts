@@ -4,7 +4,7 @@
  * Wraps PM2 API for controlling trading bots
  */
 
-import * as pm2 from 'pm2';
+import pm2 = require('pm2');
 import { ProcessStatus, BotName } from './types';
 
 /**
