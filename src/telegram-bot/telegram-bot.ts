@@ -13,6 +13,7 @@ import * as dotenv from 'dotenv';
 import { TelegramAuth, RateLimiter, AuditLogger, ConfirmationManager } from './auth';
 import { getStatusMonitor } from './monitor';
 import { getUpdownBotCSV } from './csv-reader';
+import { CommandHandlers } from './commands';
 import * as formatters from './formatters';
 import { MessageContext, BotName } from './types';
 
@@ -30,6 +31,7 @@ class TudaSudaBot {
   private confirmationManager: ConfirmationManager;
   private statusMonitor = getStatusMonitor();
   private csvReader = getUpdownBotCSV();
+  private commandHandlers: CommandHandlers;
 
   constructor() {
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -45,6 +47,7 @@ class TudaSudaBot {
     this.rateLimiter = new RateLimiter();
     this.auditLogger = new AuditLogger();
     this.confirmationManager = new ConfirmationManager();
+    this.commandHandlers = new CommandHandlers(this.confirmationManager);
 
     console.log('[BOT] Telegram bot initialized successfully');
   }
@@ -59,6 +62,19 @@ class TudaSudaBot {
     this.bot.onText(/\/status(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleStatus(msg, match)));
     this.bot.onText(/\/logs (.+)/, (msg, match) => this.handleMessage(msg, () => this.handleLogs(msg, match)));
     this.bot.onText(/\/orders(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleOrders(msg, match)));
+
+    // Admin commands
+    this.bot.onText(/\/stop (.+)/, (msg, match) =>
+      this.handleAdminMessage(msg, () => this.handleStopCommand(msg, match))
+    );
+    this.bot.onText(/\/restart (.+)/, (msg, match) =>
+      this.handleAdminMessage(msg, () => this.handleRestartCommand(msg, match))
+    );
+    this.bot.onText(/\/stopall/, (msg) =>
+      this.handleAdminMessage(msg, () => this.handleStopAllCommand(msg))
+    );
+    this.bot.onText(/\/confirm/, (msg) => this.handleMessage(msg, () => this.handleConfirmCommand(msg)));
+    this.bot.onText(/\/cancel/, (msg) => this.handleMessage(msg, () => this.handleCancelCommand(msg)));
 
     // Handle all text messages (for confirmations, etc.)
     this.bot.on('message', (msg) => {
@@ -78,6 +94,34 @@ class TudaSudaBot {
     process.on('SIGTERM', () => this.shutdown());
 
     console.log('[BOT] Telegram bot started. Waiting for commands...');
+  }
+
+  /**
+   * Handle incoming admin message (requires admin role)
+   */
+  private async handleAdminMessage(
+    msg: TelegramBot.Message,
+    handler: () => Promise<void>
+  ): Promise<void> {
+    const userId = msg.from?.id;
+    const username = msg.from?.username || msg.from?.first_name || 'unknown';
+    const chatId = msg.chat.id;
+
+    if (!userId) {
+      return;
+    }
+
+    // Check admin role
+    const role = this.auth.getUserRole(userId);
+    if (role !== 'admin') {
+      await this.bot.sendMessage(chatId, '🚫 Admin access required.');
+      return;
+    }
+
+    // Use regular handleMessage for auth and rate limiting
+    await this.handleMessage(msg, async () => {
+      await handler();
+    });
   }
 
   /**
@@ -197,18 +241,19 @@ Your role: ${roleDisplay}
 *Admin Commands:*
 /stop <bot> - Emergency stop a bot (requires confirmation)
 /restart <bot> - Restart a bot (requires confirmation)
-/logs <bot> [lines] - View recent logs (default 50 lines)
-/orders [count] - View recent orders (default 20)
+/stopall - Stop ALL trading bots (requires confirmation)
+/confirm - Confirm pending action
+/cancel - Cancel pending action
 
 *Examples:*
 \`/stop updown-cpp\` - Stop updown-cpp bot
 \`/restart updown-cpp\` - Restart updown-cpp bot
-\`/logs updown-cpp 100\` - View last 100 log lines
-\`/orders 50\` - View last 50 orders
+\`/stopall\` - Stop all bots at once
 
 *Confirmation Flow:*
-When you use a destructive command (/stop, /restart), you will receive a confirmation request.
-Reply with \`/confirm\` within 30 seconds to execute, or \`/cancel\` to abort.
+1. Send destructive command (/stop, /restart, /stopall)
+2. Bot asks for confirmation (30 second timeout)
+3. Reply with \`/confirm\` to execute or \`/cancel\` to abort
       `.trim();
     }
 
@@ -297,6 +342,58 @@ All commands are logged to audit log with timestamp, user ID, and parameters.
       const errorMsg = error instanceof Error ? error.message : String(error);
       await this.bot.sendMessage(chatId, formatters.formatError(`Failed to get orders: ${errorMsg}`));
     }
+  }
+
+  /**
+   * Handle /stop command (admin only)
+   */
+  private async handleStopCommand(msg: TelegramBot.Message, match: RegExpExecArray | null): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+    const args = match?.[1]?.trim().split(/\s+/) || [];
+
+    await this.commandHandlers.handleStop(this.bot, chatId, userId, args);
+  }
+
+  /**
+   * Handle /restart command (admin only)
+   */
+  private async handleRestartCommand(msg: TelegramBot.Message, match: RegExpExecArray | null): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+    const args = match?.[1]?.trim().split(/\s+/) || [];
+
+    await this.commandHandlers.handleRestart(this.bot, chatId, userId, args);
+  }
+
+  /**
+   * Handle /stopall command (admin only)
+   */
+  private async handleStopAllCommand(msg: TelegramBot.Message): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+
+    await this.commandHandlers.handleStopAll(this.bot, chatId, userId);
+  }
+
+  /**
+   * Handle /confirm command
+   */
+  private async handleConfirmCommand(msg: TelegramBot.Message): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+
+    await this.commandHandlers.handleConfirm(this.bot, chatId, userId);
+  }
+
+  /**
+   * Handle /cancel command
+   */
+  private async handleCancelCommand(msg: TelegramBot.Message): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+
+    await this.commandHandlers.handleCancel(this.bot, chatId, userId);
   }
 
   /**
