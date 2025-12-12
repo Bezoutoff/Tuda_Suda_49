@@ -44,7 +44,7 @@ export class StatusMonitor {
     let performance = undefined;
     let latestMarket = undefined;
 
-    if (name === 'updown-cpp' || name === 'updown-polling' || name === 'updown-ws') {
+    if (name === 'updown-btc' || name === 'updown-eth' || name === 'updown-sol' || name === 'updown-xrp' || name === 'updown-polling' || name === 'updown-ws') {
       try {
         // Try to read CSV data
         if (this.updownCSV.exists()) {
@@ -172,7 +172,7 @@ export class StatusMonitor {
     }
 
     // For updown bots, check if placing orders
-    if (name === 'updown-cpp' || name === 'updown-polling' || name === 'updown-ws') {
+    if (name === 'updown-btc' || name === 'updown-eth' || name === 'updown-sol' || name === 'updown-xrp' || name === 'updown-polling' || name === 'updown-ws') {
       if (!status.latestMarket) {
         return false; // No orders placed yet
       }
