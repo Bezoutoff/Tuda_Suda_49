@@ -17,13 +17,13 @@ export const BOT_CONFIG = {
   // Order config: price + size + expiration buffer (seconds before market start)
   // NOTE: Polymarket adds +60 sec to expiration, so we subtract 60 from desired value
   ORDER_CONFIG: [
-    { price: 0.48, size: 7,  expirationBuffer: 540 },  // 10 мин до старта (600-60)
-    { price: 0.47, size: 8,  expirationBuffer: 300 },  // 6 мин до старта (360-60)
-    { price: 0.46, size: 9,  expirationBuffer: 60 },   // 2 мин до старта (120-60)
-    { price: 0.45, size: 10, expirationBuffer: -30 },  // 30 сек до старта (30-60)
-    { price: 0.44, size: 10, expirationBuffer: -58 },  // 1 сек до старта (1-60)
-    { price: 0.43, size: 10, expirationBuffer: -58 },  // 1 сек до старта (1-60)
-    { price: 0.42, size: 10, expirationBuffer: -58 },  // 1 сек до старта (1-60)
+    { price: 0.48, size: 25,  expirationBuffer: 540 },  // 10 мин до старта (600-60)
+    { price: 0.47, size: 30,  expirationBuffer: 300 },  // 6 мин до старта (360-60)
+    { price: 0.46, size: 35,  expirationBuffer: 60 },   // 2 мин до старта (120-60)
+    { price: 0.45, size: 40, expirationBuffer: -30 },  // 30 сек до старта (30-60)
+    { price: 0.44, size: 50, expirationBuffer: -58 },  // 1 сек до старта (1-60)
+    { price: 0.43, size: 70, expirationBuffer: -58 },  // 1 сек до старта (1-60)
+    { price: 0.42, size: 70, expirationBuffer: -58 },  // 1 сек до старта (1-60)
   ],
 
   // Default order size (can be overridden by BOT_ORDER_SIZE env var)
