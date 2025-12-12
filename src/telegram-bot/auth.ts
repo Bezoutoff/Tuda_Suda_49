@@ -14,15 +14,17 @@ const AUDIT_LOG_FILE = path.join(__dirname, '..', '..', 'logs', 'telegram-bot-au
  */
 export class TelegramAuth {
   private whitelistedUsers: Set<number>;
-  private adminUser: number;
+  private adminUsers: Set<number>;
 
   constructor() {
     // Load from environment
     const userIds = process.env.TELEGRAM_USER_IDS?.split(',').map(id => parseInt(id.trim())) || [];
     this.whitelistedUsers = new Set(userIds);
-    this.adminUser = parseInt(process.env.TELEGRAM_ADMIN_ID || '0');
 
-    if (this.adminUser === 0) {
+    const adminIds = process.env.TELEGRAM_ADMIN_ID?.split(',').map(id => parseInt(id.trim())) || [];
+    this.adminUsers = new Set(adminIds);
+
+    if (this.adminUsers.size === 0) {
       console.warn('[AUTH] WARNING: TELEGRAM_ADMIN_ID not set!');
     }
 
@@ -30,7 +32,7 @@ export class TelegramAuth {
       console.warn('[AUTH] WARNING: No whitelisted users! Set TELEGRAM_USER_IDS in .env');
     }
 
-    console.log(`[AUTH] Initialized: ${this.whitelistedUsers.size} whitelisted user(s), admin: ${this.adminUser}`);
+    console.log(`[AUTH] Initialized: ${this.whitelistedUsers.size} whitelisted user(s), ${this.adminUsers.size} admin(s)`);
   }
 
   /**
@@ -44,7 +46,7 @@ export class TelegramAuth {
    * Check if user is admin
    */
   isAdmin(userId: number): boolean {
-    return userId === this.adminUser;
+    return this.adminUsers.has(userId);
   }
 
   /**
