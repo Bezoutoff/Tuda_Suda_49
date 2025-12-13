@@ -303,6 +303,10 @@ export class TradingService {
 
       console.log(`[TRADING] Received ${positions.length} positions from API`);
 
+      // Filter out redeemable positions (show only active positions)
+      positions = positions.filter((p) => !p.redeemable);
+      console.log(`[TRADING] After redeemable filter: ${positions.length} active positions`);
+
       // Filter by title if specified
       if (options?.titleFilter) {
         const filter = options.titleFilter.toLowerCase();
@@ -310,7 +314,7 @@ export class TradingService {
           p.title?.toLowerCase().includes(filter) ||
           p.slug?.toLowerCase().includes(filter)
         );
-        console.log(`[TRADING] After filter: ${positions.length} positions`);
+        console.log(`[TRADING] After title filter: ${positions.length} positions`);
       }
 
       return positions;
