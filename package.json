@@ -18,7 +18,8 @@
     "build:updown-bot": "bash build-updown-bot.sh",
     "build:all-cpp": "npm run build:cpp && npm run build:updown-bot",
     "fill-timestamps": "ts-node scripts/fill-accepting-timestamp.ts",
-    "analyze-timing": "ts-node scripts/analyze-timing.ts"
+    "analyze-timing": "ts-node scripts/analyze-timing.ts",
+    "cancel-all": "ts-node scripts/cancel-all-orders.ts"
   },
   "repository": {
     "type": "git",
