@@ -162,6 +162,21 @@ export class TradingService {
   }
 
   /**
+   * Cancel ALL open orders on the account
+   * WARNING: This will cancel every open order!
+   */
+  async cancelAllOrders(): Promise<any> {
+    if (!this.isInitialized || !this.client) {
+      throw new Error('Trading service not initialized');
+    }
+
+    console.log('[TRADING] Cancelling ALL orders...');
+    const result = await this.client.cancelAll();
+    console.log('[TRADING] All orders cancelled:', result);
+    return result;
+  }
+
+  /**
    * Create a signed order WITHOUT posting (for pre-sign optimization)
    */
   async createSignedOrder(request: CreateOrderRequest): Promise<any> {

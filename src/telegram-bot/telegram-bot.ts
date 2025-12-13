@@ -16,6 +16,8 @@ import { getUpdownBotCSV } from './csv-reader';
 import { CommandHandlers } from './commands';
 import * as formatters from './formatters';
 import { MessageContext, BotName } from './types';
+import { TradingService } from '../trading-service';
+import { tradingConfig, validateTradingConfig } from '../config';
 
 // Load environment variables
 dotenv.config();
@@ -32,11 +34,17 @@ class TudaSudaBot {
   private statusMonitor = getStatusMonitor();
   private csvReader = getUpdownBotCSV();
   private commandHandlers: CommandHandlers;
+  private tradingService: TradingService;
 
   constructor() {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) {
       throw new Error('TELEGRAM_BOT_TOKEN not found in .env');
+    }
+
+    // Validate trading config
+    if (!validateTradingConfig(tradingConfig)) {
+      throw new Error('Invalid trading configuration');
     }
 
     // Initialize bot
@@ -47,7 +55,12 @@ class TudaSudaBot {
     this.rateLimiter = new RateLimiter();
     this.auditLogger = new AuditLogger();
     this.confirmationManager = new ConfirmationManager();
-    this.commandHandlers = new CommandHandlers(this.confirmationManager);
+
+    // Initialize trading service
+    this.tradingService = new TradingService(tradingConfig);
+
+    // Initialize command handlers with trading service
+    this.commandHandlers = new CommandHandlers(this.confirmationManager, this.tradingService);
 
     console.log('[BOT] Telegram bot initialized successfully');
   }
@@ -72,6 +85,9 @@ class TudaSudaBot {
     );
     this.bot.onText(/\/stopall/, (msg) =>
       this.handleAdminMessage(msg, () => this.handleStopAllCommand(msg))
+    );
+    this.bot.onText(/\/cancelorders/, (msg) =>
+      this.handleAdminMessage(msg, () => this.handleCancelOrdersCommand(msg))
     );
     this.bot.onText(/\/confirm/, (msg) => this.handleMessage(msg, () => this.handleConfirmCommand(msg)));
     this.bot.onText(/\/cancel/, (msg) => this.handleMessage(msg, () => this.handleCancelCommand(msg)));
@@ -242,6 +258,7 @@ Your role: ${roleDisplay}
 /stop <bot> - Emergency stop a bot (requires confirmation)
 /restart <bot> - Restart a bot (requires confirmation)
 /stopall - Stop ALL trading bots (requires confirmation)
+/cancelorders - Cancel ALL open orders (requires confirmation)
 /confirm - Confirm pending action
 /cancel - Cancel pending action
 
@@ -377,6 +394,16 @@ All commands are logged to audit log with timestamp, user ID, and parameters.
     const userId = msg.from!.id;
 
     await this.commandHandlers.handleStopAll(this.bot, chatId, userId);
+  }
+
+  /**
+   * Handle /cancelorders command (admin only)
+   */
+  private async handleCancelOrdersCommand(msg: TelegramBot.Message): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+
+    await this.commandHandlers.handleCancelOrders(this.bot, chatId, userId);
   }
 
   /**

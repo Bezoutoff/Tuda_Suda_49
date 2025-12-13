@@ -9,6 +9,7 @@ import { getPM2Controller } from './pm2-controller';
 import { ConfirmationManager } from './auth';
 import * as formatters from './formatters';
 import { BotName } from './types';
+import { TradingService } from '../trading-service';
 
 /**
  * Command Handlers Class
@@ -16,9 +17,11 @@ import { BotName } from './types';
 export class CommandHandlers {
   private pm2Controller = getPM2Controller();
   private confirmationManager: ConfirmationManager;
+  private tradingService: TradingService;
 
-  constructor(confirmationManager: ConfirmationManager) {
+  constructor(confirmationManager: ConfirmationManager, tradingService: TradingService) {
     this.confirmationManager = confirmationManager;
+    this.tradingService = tradingService;
   }
 
   /**
@@ -134,6 +137,8 @@ export class CommandHandlers {
         await this.executeRestart(bot, chatId, action.target);
       } else if (action.action === 'stop_all') {
         await this.executeStopAll(bot, chatId);
+      } else if (action.action === 'cancel_all_orders') {
+        await this.executeCancelAllOrders(bot, chatId);
       } else {
         await bot.sendMessage(chatId, formatters.formatError('Unknown action type.'));
       }
@@ -262,5 +267,41 @@ export class CommandHandlers {
 
     const confirmMsg = formatters.formatConfirmationRequest('Stop ALL trading bots');
     await bot.sendMessage(chatId, confirmMsg, { parse_mode: 'Markdown' });
+  }
+
+  /**
+   * Handle /cancelorders command (admin only)
+   * Cancels ALL open orders on the account
+   */
+  async handleCancelOrders(bot: TelegramBot, chatId: number, userId: number): Promise<void> {
+    // Request confirmation
+    this.confirmationManager.requestConfirmation(userId, {
+      action: 'cancel_all_orders',
+    });
+
+    const confirmMsg = formatters.formatConfirmationRequest(
+      'Cancel ALL open orders on your account',
+      '⚠️ This will cancel EVERY open order!'
+    );
+    await bot.sendMessage(chatId, confirmMsg, { parse_mode: 'Markdown' });
+  }
+
+  /**
+   * Execute cancel all orders action
+   */
+  private async executeCancelAllOrders(bot: TelegramBot, chatId: number): Promise<void> {
+    await bot.sendMessage(chatId, '🗑️ Cancelling all orders...');
+
+    try {
+      const result = await this.tradingService.cancelAllOrders();
+
+      await bot.sendMessage(
+        chatId,
+        formatters.formatSuccess(`All orders cancelled successfully!\n\nResult: ${JSON.stringify(result, null, 2)}`)
+      );
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await bot.sendMessage(chatId, formatters.formatError(`Cancel all failed: ${errorMsg}`));
+    }
   }
 }
