@@ -52,7 +52,7 @@ class TudaSudaBot {
     this.confirmationManager = new ConfirmationManager();
 
     // Initialize trading service only if credentials are available
-    if (validateTradingConfig(tradingConfig)) {
+    if (validateTradingConfig(tradingConfig, true)) {
       this.tradingService = new TradingService(tradingConfig);
       console.log('[BOT] Trading service initialized');
     } else {

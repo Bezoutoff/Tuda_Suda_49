@@ -66,7 +66,7 @@ export const tradingConfig: TradingConfig = {
 /**
  * Validate trading configuration
  */
-export function validateTradingConfig(config: TradingConfig): boolean {
+export function validateTradingConfig(config: TradingConfig, silent = false): boolean {
   const errors: string[] = [];
 
   if (!config.privateKey || config.privateKey.length === 0 || config.privateKey === '0x') {
@@ -88,9 +88,11 @@ export function validateTradingConfig(config: TradingConfig): boolean {
   }
 
   if (errors.length > 0) {
-    console.error('Configuration errors:');
-    errors.forEach(err => console.error(`  - ${err}`));
-    console.error('\nPlease set required variables in .env file');
+    if (!silent) {
+      console.error('Configuration errors:');
+      errors.forEach(err => console.error(`  - ${err}`));
+      console.error('\nPlease set required variables in .env file');
+    }
     return false;
   }
 
