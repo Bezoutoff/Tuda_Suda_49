@@ -8,8 +8,11 @@
  * - Rate limiting and audit logging
  */
 
-import TelegramBot from 'node-telegram-bot-api';
+// IMPORTANT: Load environment variables BEFORE any imports that use them
 import * as dotenv from 'dotenv';
+dotenv.config();
+
+import TelegramBot from 'node-telegram-bot-api';
 import { TelegramAuth, RateLimiter, AuditLogger, ConfirmationManager } from './auth';
 import { getStatusMonitor } from './monitor';
 import { getUpdownBotCSV } from './csv-reader';
@@ -18,9 +21,6 @@ import * as formatters from './formatters';
 import { MessageContext, BotName } from './types';
 import { TradingService } from '../trading-service';
 import { tradingConfig, validateTradingConfig } from '../config';
-
-// Load environment variables
-dotenv.config();
 
 /**
  * Main Telegram Bot Class
