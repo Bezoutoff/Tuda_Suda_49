@@ -42,11 +42,6 @@ class TudaSudaBot {
       throw new Error('TELEGRAM_BOT_TOKEN not found in .env');
     }
 
-    // Validate trading config
-    if (!validateTradingConfig(tradingConfig)) {
-      throw new Error('Invalid trading configuration');
-    }
-
     // Initialize bot
     this.bot = new TelegramBot(token, { polling: true });
 
@@ -56,8 +51,19 @@ class TudaSudaBot {
     this.auditLogger = new AuditLogger();
     this.confirmationManager = new ConfirmationManager();
 
-    // Initialize trading service
-    this.tradingService = new TradingService(tradingConfig);
+    // Initialize trading service only if credentials are available
+    if (validateTradingConfig(tradingConfig)) {
+      this.tradingService = new TradingService(tradingConfig);
+      console.log('[BOT] Trading service initialized');
+    } else {
+      console.warn('[BOT] Trading credentials not configured - /cancelorders command will not be available');
+      // Create dummy trading service that throws error when used
+      this.tradingService = {
+        cancelAllOrders: async () => {
+          throw new Error('Trading service not configured. Please set PK, CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE in .env');
+        }
+      } as any;
+    }
 
     // Initialize command handlers with trading service
     this.commandHandlers = new CommandHandlers(this.confirmationManager, this.tradingService);
