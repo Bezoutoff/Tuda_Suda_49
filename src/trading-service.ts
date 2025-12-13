@@ -263,11 +263,12 @@ export class TradingService {
 
   /**
    * Fetch user positions from Polymarket Data API
-   * @param options - Filter options (limit, titleFilter)
+   * @param options - Filter options (limit, titleFilter, redeemable)
    */
   async getPositions(options?: {
     limit?: number;
     titleFilter?: string;
+    redeemable?: boolean;
   }): Promise<PositionData[]> {
     const limit = Math.min(options?.limit || 100, 100);
 
@@ -303,9 +304,12 @@ export class TradingService {
 
       console.log(`[TRADING] Received ${positions.length} positions from API`);
 
-      // Filter out redeemable positions (show only active positions)
-      positions = positions.filter((p) => !p.redeemable);
-      console.log(`[TRADING] After redeemable filter: ${positions.length} active positions`);
+      // Filter by redeemable status if specified
+      if (options?.redeemable !== undefined) {
+        positions = positions.filter((p) => p.redeemable === options.redeemable);
+        const statusText = options.redeemable ? 'closed' : 'active';
+        console.log(`[TRADING] After redeemable filter: ${positions.length} ${statusText} positions`);
+      }
 
       // Filter by title if specified
       if (options?.titleFilter) {

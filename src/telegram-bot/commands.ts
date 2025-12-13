@@ -341,10 +341,11 @@ export class CommandHandlers {
       // Send loading message
       await bot.sendMessage(chatId, '📊 Fetching your positions...');
 
-      // Fetch positions
+      // Fetch active positions only (redeemable: false)
       const positions = await this.tradingService.getPositions({
         limit,
         titleFilter,
+        redeemable: false,
       });
 
       // Format and send response
@@ -356,6 +357,62 @@ export class CommandHandlers {
       await bot.sendMessage(
         chatId,
         formatters.formatError(`Failed to fetch positions: ${errorMsg}`)
+      );
+    }
+  }
+
+  /**
+   * Handle /closed command
+   * Shows user's closed positions (redeemable) from Polymarket
+   */
+  async handleClosedPositions(
+    bot: TelegramBot,
+    chatId: number,
+    userId: number,
+    args: string[]
+  ): Promise<void> {
+    try {
+      // Parse arguments (default limit 10 for closed positions)
+      let limit = 10;
+      let titleFilter: string | undefined;
+
+      if (args.length > 0) {
+        const firstArg = args[0];
+        const parsedLimit = parseInt(firstArg);
+
+        if (!isNaN(parsedLimit) && parsedLimit > 0) {
+          limit = Math.min(parsedLimit, 100);
+        } else {
+          titleFilter = firstArg;
+
+          if (args.length > 1) {
+            const secondLimit = parseInt(args[1]);
+            if (!isNaN(secondLimit) && secondLimit > 0) {
+              limit = Math.min(secondLimit, 100);
+            }
+          }
+        }
+      }
+
+      // Send loading message
+      await bot.sendMessage(chatId, '📊 Fetching closed positions...');
+
+      // Fetch closed positions only (redeemable: true)
+      const positions = await this.tradingService.getPositions({
+        limit,
+        titleFilter,
+        redeemable: true,
+      });
+
+      // Format and send response
+      const formatted = formatters.formatPositions(positions);
+      await bot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await bot.sendMessage(
+        chatId,
+        formatters.formatError(`Failed to fetch closed positions: ${errorMsg}`)
       );
     }
   }

@@ -92,6 +92,7 @@ class TudaSudaBot {
     this.bot.onText(/\/logs (.+)/, (msg, match) => this.handleMessage(msg, () => this.handleLogs(msg, match)));
     this.bot.onText(/\/orders(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleOrders(msg, match)));
     this.bot.onText(/\/positions(.*)/, (msg, match) => this.handleMessage(msg, () => this.handlePositions(msg, match)));
+    this.bot.onText(/\/closed(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleClosedPositions(msg, match)));
 
     // Admin commands
     this.bot.onText(/\/stop (.+)/, (msg, match) =>
@@ -263,15 +264,18 @@ Your role: ${roleDisplay}
 /status - View all bots status and performance
 /status <bot> - View specific bot (updown-cpp, updown-polling, updown-ws)
 /positions [filter] [limit] - View your open positions
+/closed [filter] [limit] - View closed positions (last 10 by default)
 /orders [count] - View recent orders
 
 *Examples:*
 \`/status\` - Show all bots
 \`/status updown-cpp\` - Show only updown-cpp bot
-\`/positions\` - Show all positions (up to 20)
-\`/positions 10\` - Show 10 positions
+\`/positions\` - Show open positions (up to 20)
+\`/positions 10\` - Show 10 open positions
 \`/positions btc\` - Filter by "btc"
-\`/positions eth 5\` - Show 5 ETH positions
+\`/closed\` - Show last 10 closed positions
+\`/closed 20\` - Show 20 closed positions
+\`/closed btc\` - Filter closed positions by "btc"
     `.trim();
 
     if (ctx.role === 'admin') {
@@ -396,6 +400,17 @@ All commands are logged to audit log with timestamp, user ID, and parameters.
     const args = match?.[1]?.trim().split(/\s+/).filter(a => a.length > 0) || [];
 
     await this.commandHandlers.handlePositions(this.bot, chatId, userId, args);
+  }
+
+  /**
+   * Handle /closed command
+   */
+  private async handleClosedPositions(msg: TelegramBot.Message, match: RegExpExecArray | null): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+    const args = match?.[1]?.trim().split(/\s+/).filter(a => a.length > 0) || [];
+
+    await this.commandHandlers.handleClosedPositions(this.bot, chatId, userId, args);
   }
 
   /**
