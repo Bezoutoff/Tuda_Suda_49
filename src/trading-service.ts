@@ -271,12 +271,18 @@ export class TradingService {
   }): Promise<PositionData[]> {
     const limit = Math.min(options?.limit || 100, 100);
 
+    // Use funder address (proxy wallet) for positions - Polymarket stores positions there
+    const userAddress = this.funder;
+
     const url = new URL('https://data-api.polymarket.com/positions');
-    url.searchParams.set('user', this.wallet.address);
+    url.searchParams.set('user', userAddress);
     url.searchParams.set('limit', limit.toString());
     url.searchParams.set('sortBy', 'CURRENT');
     url.searchParams.set('sortDirection', 'DESC');
     url.searchParams.set('sizeThreshold', '0');
+
+    console.log(`[TRADING] Fetching positions for address: ${userAddress}`);
+    console.log(`[TRADING] API URL: ${url.toString()}`);
 
     try {
       const response = await fetch(url.toString());
@@ -295,6 +301,8 @@ export class TradingService {
 
       let positions = data as PositionData[];
 
+      console.log(`[TRADING] Received ${positions.length} positions from API`);
+
       // Filter by title if specified
       if (options?.titleFilter) {
         const filter = options.titleFilter.toLowerCase();
@@ -302,6 +310,7 @@ export class TradingService {
           p.title?.toLowerCase().includes(filter) ||
           p.slug?.toLowerCase().includes(filter)
         );
+        console.log(`[TRADING] After filter: ${positions.length} positions`);
       }
 
       return positions;
