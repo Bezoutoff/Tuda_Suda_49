@@ -81,6 +81,7 @@ class TudaSudaBot {
     this.bot.onText(/\/status(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleStatus(msg, match)));
     this.bot.onText(/\/logs (.+)/, (msg, match) => this.handleMessage(msg, () => this.handleLogs(msg, match)));
     this.bot.onText(/\/orders(.*)/, (msg, match) => this.handleMessage(msg, () => this.handleOrders(msg, match)));
+    this.bot.onText(/\/positions(.*)/, (msg, match) => this.handleMessage(msg, () => this.handlePositions(msg, match)));
 
     // Admin commands
     this.bot.onText(/\/stop (.+)/, (msg, match) =>
@@ -251,10 +252,16 @@ Your role: ${roleDisplay}
 /help - This help message
 /status - View all bots status and performance
 /status <bot> - View specific bot (updown-cpp, updown-polling, updown-ws)
+/positions [filter] [limit] - View your open positions
+/orders [count] - View recent orders
 
-*Example:*
+*Examples:*
 \`/status\` - Show all bots
 \`/status updown-cpp\` - Show only updown-cpp bot
+\`/positions\` - Show all positions (up to 20)
+\`/positions 10\` - Show 10 positions
+\`/positions btc\` - Filter by "btc"
+\`/positions eth 5\` - Show 5 ETH positions
     `.trim();
 
     if (ctx.role === 'admin') {
@@ -368,6 +375,17 @@ All commands are logged to audit log with timestamp, user ID, and parameters.
       const errorMsg = error instanceof Error ? error.message : String(error);
       await this.bot.sendMessage(chatId, formatters.formatError(`Failed to get orders: ${errorMsg}`));
     }
+  }
+
+  /**
+   * Handle /positions command
+   */
+  private async handlePositions(msg: TelegramBot.Message, match: RegExpExecArray | null): Promise<void> {
+    const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+    const args = match?.[1]?.trim().split(/\s+/).filter(a => a.length > 0) || [];
+
+    await this.commandHandlers.handlePositions(this.bot, chatId, userId, args);
   }
 
   /**

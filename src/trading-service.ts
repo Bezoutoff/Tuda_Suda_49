@@ -6,6 +6,7 @@
 import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { Wallet } from 'ethers';
 import { TradingConfig, CreateOrderRequest, Order } from './types';
+import { PositionData } from './telegram-bot/types';
 
 /**
  * Note: DNS bypass via dns.lookup patching doesn't work in newer Node.js
@@ -246,5 +247,62 @@ export class TradingService {
       orderType: orderType === OrderType.GTD ? 'GTD' : 'GTC',
       rawResponse: firstResponse,  // Include full response
     };
+  }
+
+  /**
+   * Get wallet address for API calls
+   */
+  getWalletAddress(): string {
+    return this.wallet.address;
+  }
+
+  /**
+   * Fetch user positions from Polymarket Data API
+   * @param options - Filter options (limit, titleFilter)
+   */
+  async getPositions(options?: {
+    limit?: number;
+    titleFilter?: string;
+  }): Promise<PositionData[]> {
+    const limit = Math.min(options?.limit || 100, 100);
+
+    const url = new URL('https://data-api.polymarket.com/positions');
+    url.searchParams.set('user', this.wallet.address);
+    url.searchParams.set('limit', limit.toString());
+    url.searchParams.set('sortBy', 'CURRENT');
+    url.searchParams.set('sortDirection', 'DESC');
+    url.searchParams.set('sizeThreshold', '0');
+
+    try {
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[TRADING] Positions API error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid response format: expected array');
+      }
+
+      let positions = data as PositionData[];
+
+      // Filter by title if specified
+      if (options?.titleFilter) {
+        const filter = options.titleFilter.toLowerCase();
+        positions = positions.filter((p) =>
+          p.title?.toLowerCase().includes(filter) ||
+          p.slug?.toLowerCase().includes(filter)
+        );
+      }
+
+      return positions;
+    } catch (error) {
+      console.error('[TRADING] Failed to fetch positions:', error);
+      throw error;
+    }
   }
 }

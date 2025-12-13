@@ -4,7 +4,7 @@
  * Formats bot status, performance, logs for display in Telegram
  */
 
-import { BotStatus, SystemStatus, ProcessStatus, PerformanceMetrics, OrderRecord } from './types';
+import { BotStatus, SystemStatus, ProcessStatus, PerformanceMetrics, OrderRecord, PositionData } from './types';
 
 /**
  * Format uptime in human-readable form
@@ -326,4 +326,51 @@ export function formatWarning(message: string): string {
  */
 export function formatInfo(message: string): string {
   return `ℹ️ ${message}`;
+}
+
+/**
+ * Format positions list
+ */
+export function formatPositions(positions: PositionData[]): string {
+  if (positions.length === 0) {
+    return '💼 *Your Positions*\n\nYou have no open positions.';
+  }
+
+  // Calculate totals
+  const totalValue = positions.reduce((sum, p) => sum + p.currentValue, 0);
+  const totalPnl = positions.reduce((sum, p) => sum + p.cashPnl, 0);
+  const totalPnlPercent = totalValue > 0
+    ? (totalPnl / (totalValue - totalPnl)) * 100
+    : 0;
+
+  // Header with summary
+  let msg = `💼 *Your Positions* (${positions.length})\n`;
+  msg += `Total Value: $${totalValue.toFixed(2)}\n`;
+
+  const pnlEmoji = totalPnl >= 0 ? '📈' : '📉';
+  const pnlSign = totalPnl >= 0 ? '+' : '';
+  msg += `Total P&L: ${pnlEmoji} ${pnlSign}$${totalPnl.toFixed(2)} (${pnlSign}${totalPnlPercent.toFixed(1)}%)\n`;
+  msg += '\n';
+
+  // Individual positions
+  positions.forEach((pos, index) => {
+    const posEmoji = pos.cashPnl > 0 ? '📈' : pos.cashPnl < 0 ? '📉' : '➡️';
+    const pnlSign = pos.cashPnl >= 0 ? '+' : '';
+
+    // Truncate long titles
+    const title = pos.title.length > 60
+      ? pos.title.substring(0, 57) + '...'
+      : pos.title;
+
+    msg += `${posEmoji} *${title}* | ${pos.outcome}\n`;
+    msg += `  Size: ${pos.size.toFixed(0)} shares\n`;
+    msg += `  Avg: $${pos.avgPrice.toFixed(3)} → Now: $${pos.curPrice.toFixed(3)}\n`;
+    msg += `  Value: $${pos.currentValue.toFixed(2)} | P&L: ${pnlSign}$${pos.cashPnl.toFixed(2)} (${pnlSign}${pos.percentPnl.toFixed(1)}%)\n`;
+
+    if (index < positions.length - 1) {
+      msg += '\n';
+    }
+  });
+
+  return msg;
 }
