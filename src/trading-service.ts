@@ -37,8 +37,13 @@ export class TradingService {
     console.log(`  Wallet: ${this.wallet.address}`);
     console.log(`  Funder: ${this.funder}`);
 
-    // Initialize CLOB client
-    this.initializeClient();
+    // Initialize CLOB client only if credentials are provided
+    if (config.apiKey && config.secret && config.passphrase) {
+      this.initializeClient();
+    } else {
+      console.warn('  CLOB client not initialized (credentials not provided)');
+      console.warn('  Only Data API methods (getPositions) will be available');
+    }
   }
 
   private initializeClient(): void {

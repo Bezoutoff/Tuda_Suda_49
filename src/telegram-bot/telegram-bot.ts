@@ -51,16 +51,26 @@ class TudaSudaBot {
     this.auditLogger = new AuditLogger();
     this.confirmationManager = new ConfirmationManager();
 
-    // Initialize trading service only if credentials are available
-    if (validateTradingConfig(tradingConfig, true)) {
+    // Initialize trading service if at least private key is available
+    // (needed for getPositions which uses wallet address)
+    if (tradingConfig.privateKey && tradingConfig.privateKey !== '0x') {
       this.tradingService = new TradingService(tradingConfig);
-      console.log('[BOT] Trading service initialized');
+
+      if (validateTradingConfig(tradingConfig, true)) {
+        console.log('[BOT] Trading service fully initialized (CLOB + Data API)');
+      } else {
+        console.warn('[BOT] Trading service initialized with limited functionality (Data API only)');
+        console.warn('[BOT] /cancelorders command will not be available - CLOB credentials not configured');
+      }
     } else {
-      console.warn('[BOT] Trading credentials not configured - /cancelorders command will not be available');
+      console.error('[BOT] Trading service not initialized - PK not configured');
       // Create dummy trading service that throws error when used
       this.tradingService = {
         cancelAllOrders: async () => {
-          throw new Error('Trading service not configured. Please set PK, CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE in .env');
+          throw new Error('Trading service not configured. Please set PK in .env');
+        },
+        getPositions: async () => {
+          throw new Error('Trading service not configured. Please set PK in .env');
         }
       } as any;
     }
