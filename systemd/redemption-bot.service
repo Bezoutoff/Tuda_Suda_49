@@ -1,0 +1,27 @@
+[Unit]
+Description=Polymarket Redemption Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/Tuda_Suda_49
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /root/Tuda_Suda_49/scripts/redemption/main.py
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=redemption-bot
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Restart on failure
+Restart=on-failure
+RestartSec=5min
+
+[Install]
+WantedBy=multi-user.target

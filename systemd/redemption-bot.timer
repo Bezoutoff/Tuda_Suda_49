@@ -1,0 +1,17 @@
+[Unit]
+Description=Run Polymarket Redemption Bot every 60 minutes
+Requires=redemption-bot.service
+
+[Timer]
+# Run every 60 minutes
+OnBootSec=5min
+OnUnitActiveSec=60min
+
+# Run even if missed (e.g., system was off)
+Persistent=true
+
+# Randomize start time by 5min to avoid exact hour marks
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

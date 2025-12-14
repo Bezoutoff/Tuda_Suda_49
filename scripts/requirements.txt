@@ -1,0 +1,13 @@
+# Python dependencies for Polymarket Redemption Bot
+
+# Web3 and Ethereum
+web3==6.15.1
+eth-account==0.11.0
+eth-abi==4.2.1
+hexbytes==1.2.0
+
+# HTTP requests
+requests==2.31.0
+
+# .env loading
+python-dotenv==1.0.1
