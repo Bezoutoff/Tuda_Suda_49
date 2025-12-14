@@ -36,43 +36,54 @@ class PolymarketAPI:
     def fetch_redeemable_positions(self) -> List[Position]:
         """
         Fetch all redeemable positions for funder address.
-        Returns list of Position objects with balance > 0.
+        Returns list of Position objects with redeemable=true.
 
-        API endpoint: GET /balances/{funder_address}
+        API endpoint: GET /positions?user={funder_address}&redeemable=true
         """
-        url = f"{self.api_url}/{self.funder_address}"
-        logger.info(f"Fetching positions from: {url}")
+        # Build URL with query params (same as trading-service.ts)
+        params = {
+            'user': self.funder_address,
+            'limit': '100',
+            'sortBy': 'CURRENT',
+            'sortDirection': 'DESC',
+            'sizeThreshold': '0',
+        }
+
+        logger.info(f"Fetching positions from: {self.api_url}")
+        logger.info(f"For user: {self.funder_address}")
 
         try:
-            response = self.session.get(url, timeout=30)
+            response = self.session.get(self.api_url, params=params, timeout=30)
             response.raise_for_status()
 
             data = response.json()
 
-            # Response structure may vary - adapt based on actual API
-            # Expected format: { "balances": [...] } or just [...]
-            if isinstance(data, dict):
-                balances = data.get('balances', data.get('data', []))
-            else:
-                balances = data
+            # Response is array of positions
+            if not isinstance(data, list):
+                raise ValueError(f"Expected array, got {type(data)}")
 
-            logger.info(f"Received {len(balances)} balance records")
+            logger.info(f"Received {len(data)} total positions")
 
+            # Filter only redeemable positions
             positions = []
-            for item in balances:
-                # Only process positions with non-zero balance
-                balance = float(item.get('balance', 0))
-                if balance <= 0:
+            for item in data:
+                # Check if redeemable
+                if not item.get('redeemable', False):
                     continue
 
-                # Extract fields (adapt based on actual API response)
+                # Get position size
+                size = float(item.get('size', 0))
+                if size <= 0:
+                    continue
+
+                # Extract fields (from Data API response format)
                 position = Position(
-                    asset=item.get('asset', ''),
-                    balance=balance,
+                    asset=item.get('asset_id', item.get('token_id', '')),
+                    balance=size,  # 'size' field from Data API
                     condition_id=item.get('condition_id', ''),
-                    outcome_index=int(item.get('outcome', item.get('outcome_index', 0))),
-                    market_slug=item.get('market', item.get('market_slug', '')),
-                    market_title=item.get('market_title', item.get('question', 'Unknown')),
+                    outcome_index=int(item.get('outcome', 0)),
+                    market_slug=item.get('market', ''),
+                    market_title=item.get('question', 'Unknown'),
                 )
                 positions.append(position)
 

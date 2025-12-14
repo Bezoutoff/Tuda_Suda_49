@@ -24,7 +24,7 @@ class RedemptionConfig:
     passphrase: str
 
     # API endpoints
-    balances_api_url: str = "https://clob.polymarket.com/balances"
+    positions_api_url: str = "https://data-api.polymarket.com/positions"
     relayer_api_url: str = "https://clob.polymarket.com"  # Use CLOB for now, may need different endpoint
 
     # CTF contract and USDC

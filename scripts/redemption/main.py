@@ -66,7 +66,7 @@ def main() -> int:
 
         # 2. Initialize components
         logger.info("Initializing components...")
-        api_client = PolymarketAPI(config.balances_api_url, config.funder_address)
+        api_client = PolymarketAPI(config.positions_api_url, config.funder_address)
         relayer_client = BuilderRelayerClient(
             config.relayer_api_url,
             config.private_key,
