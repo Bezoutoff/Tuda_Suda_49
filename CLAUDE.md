@@ -353,6 +353,191 @@ python scripts/plot_latency.py latency.csv
 **Выходные файлы:**
 - `latency_plot.png` — графики latency
 
+## Redemption Bot - Автоматический выкуп позиций
+
+### Обзор
+
+**Redemption Bot** — автоматический Python бот для выкупа завершенных позиций на Polymarket. Запускается каждые 60 минут через systemd timer и автоматически выкупает (redeem) позиции с завершенных маркетов.
+
+### Архитектура
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Systemd Timer (каждые 60 минут)                           │
+└────────────────┬────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Python Redemption Bot (main.py)                           │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │ 1. config.py → Load .env credentials              │     │
+│  └───────────────┬───────────────────────────────────┘     │
+│                  ▼                                          │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │ 2. polymarket_api.py → GET /balances/{funder}     │     │
+│  └───────────────┬───────────────────────────────────┘     │
+│                  ▼                                          │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │ 3. redemption_logic.py → Group by condition_id    │     │
+│  │    Calculate indexSets for each outcome           │     │
+│  └───────────────┬───────────────────────────────────┘     │
+│                  ▼                                          │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │ 4. relayer_client.py → POST /redeem               │     │
+│  │    Builder Relayer integration                    │     │
+│  └───────────────┬───────────────────────────────────┘     │
+│                  ▼                                          │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │ 5. telegram_notifier.py → Send to Telegram        │     │
+│  │    csv_logger.py → Log to redemption.csv          │     │
+│  └───────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Файлы
+
+```
+scripts/
+├── redemption/
+│   ├── __init__.py              # Python package marker
+│   ├── main.py                  # Entry point (systemd запускает это)
+│   ├── config.py                # Загрузка .env, валидация
+│   ├── polymarket_api.py        # GET /balances API client
+│   ├── redemption_logic.py      # Группировка по condition_id, indexSets
+│   ├── relayer_client.py        # Builder Relayer + HMAC auth
+│   ├── telegram_notifier.py     # Telegram уведомления (HTTP)
+│   └── csv_logger.py            # CSV логи
+└── requirements.txt             # Python зависимости
+
+systemd/
+├── redemption-bot.service       # Systemd service (oneshot)
+└── redemption-bot.timer         # Systemd timer (60 min)
+
+logs/
+└── redemption.csv               # CSV лог результатов
+```
+
+### Логика работы
+
+1. **Systemd timer** запускает `main.py` каждые 60 минут
+2. **API запрос**: GET `/balances/{funder_address}` — получить позиции
+3. **Группировка**: по `condition_id`, вычисление `indexSets` (2^outcome_index)
+4. **Redemption**: POST `/redeem` через Builder Relayer (газ покрывает relayer)
+5. **Уведомления**: Telegram (начало, найдены позиции, успех/ошибка)
+6. **Логирование**: CSV файл (timestamp, condition, amount, tx_hash, status)
+
+### Установка
+
+```bash
+# 1. Установить Python зависимости
+pip3 install -r scripts/requirements.txt
+
+# 2. Тест (manual run)
+python3 scripts/redemption/main.py
+
+# 3. Установить systemd timer (Linux VPS)
+sudo cp systemd/redemption-bot.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable redemption-bot.timer
+sudo systemctl start redemption-bot.timer
+
+# 4. Проверить статус
+sudo systemctl status redemption-bot.timer
+sudo journalctl -u redemption-bot.service -f
+```
+
+### Мониторинг
+
+```bash
+# Статус timer
+sudo systemctl list-timers redemption-bot.timer
+
+# Live logs (systemd journal)
+sudo journalctl -u redemption-bot.service -f
+
+# CSV результаты
+tail -f logs/redemption.csv
+
+# Ручной запуск (не дожидаться timer)
+sudo systemctl start redemption-bot.service
+```
+
+### Telegram уведомления
+
+Если настроены `TELEGRAM_BOT_TOKEN` и `TELEGRAM_ADMIN_ID`, бот отправляет:
+
+- 🔍 **Check start**: "Redemption Check Started" (время запуска)
+- 💰 **Found positions**: "Found 3 conditions, $45.67 USDC to redeem"
+- ✅ **Success**: "Redeemed $15.00 from condition abc123... (tx: 0xdef456...)"
+- ❌ **Error**: "Failed to redeem condition xyz789...: error message"
+- ℹ️ **No positions**: "No positions to redeem"
+
+### CSV формат
+
+`logs/redemption.csv`:
+
+```csv
+timestamp,condition_id,parent_collection_id,index_sets,amount_usdc,status,tx_hash,error
+2025-12-14T10:00:15,0xabc123...,0x000...,1|2,15.500000,success,0xdef456...,
+2025-12-14T10:00:18,0xghi789...,0x000...,1,8.250000,error,,Relayer timeout
+```
+
+### IndexSets Calculation
+
+Binary markets (2 outcomes):
+- Outcome 0 (YES) → indexSet = 2^0 = 1 (binary: 01)
+- Outcome 1 (NO) → indexSet = 2^1 = 2 (binary: 10)
+
+Multi-outcome markets:
+- indexSet = 1 << outcome_index (bitshift)
+
+### Builder Relayer Integration
+
+Использует те же credentials что CLOB API (`CLOB_API_KEY`, `CLOB_SECRET`, `CLOB_PASS_PHRASE`):
+
+1. **HMAC-SHA256 signature**: `timestamp + method + path + body`
+2. **Headers**:
+   - `POLY_ADDRESS`: wallet address (НЕ funder!)
+   - `POLY_SIGNATURE`: URL-safe base64
+   - `POLY_TIMESTAMP`: unix timestamp
+   - `POLY_API_KEY`: API key
+   - `POLY_PASSPHRASE`: passphrase
+
+3. **Endpoint**: POST `/redeem`
+   - `conditionId`: condition ID маркета
+   - `indexSets`: список indexSets для выкупа
+   - `parentCollectionId`: обычно 0x000...
+
+### Конфигурация
+
+Использует существующие credentials из `.env`:
+- `PK` — приватный ключ (для подписи)
+- `FUNDER` — funder address (для API запросов)
+- `CLOB_API_KEY`, `CLOB_SECRET`, `CLOB_PASS_PHRASE` — Builder Relayer auth
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_ID` — уведомления (опционально)
+
+### Systemd Timer
+
+**redemption-bot.timer**:
+- `OnBootSec=5min` — первый запуск через 5 мин после загрузки
+- `OnUnitActiveSec=60min` — повторный запуск каждые 60 минут
+- `Persistent=true` — запускать пропущенные runs (если система была выключена)
+- `RandomizedDelaySec=5min` — случайная задержка до 5 мин (избежать нагрузки ровно в час)
+
+**redemption-bot.service**:
+- `Type=oneshot` — запускается один раз, завершается
+- `Restart=on-failure` — restart если exit code != 0 (после 5 мин)
+- `StandardOutput=journal` — логи в systemd journalctl
+
+### Документация
+
+Подробная инструкция в `REDEMPTION_README.md`:
+- Установка и настройка
+- Команды управления
+- Мониторинг и troubleshooting
+- Изменение интервала
+- Интеграция с Telegram ботом
+
 ## Troubleshooting (Расширенный)
 
 ### C++ Latency Test: latencyRecords.length = 0
@@ -462,6 +647,7 @@ await Promise.all(inFlightRequests);
 
 ## История
 
+- **2025-12-14**: Redemption Bot - автоматический выкуп позиций (Python, systemd timer, Telegram уведомления)
 - **2025-12-09**: Fix expirationBuffer - учёт +60 сек от Polymarket
 - **2025-12-08**: Python визуализация latency (plot_latency.py), тёмная тема, подписи значений
 - **2025-12-08**: Fix latencyRecords tracking - shouldLog() теперь логирует все попытки
