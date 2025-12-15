@@ -123,10 +123,16 @@ class BuilderRelayerClient:
         )
 
         logger.debug(f"Calldata: {calldata}")
+        logger.debug(f"CTF contract: {ctf_contract}")
+        logger.debug(f"Condition ID: {condition_id}")
+        logger.debug(f"Index sets: {index_sets}")
+
+        # Ensure CTF contract is checksummed
+        ctf_checksummed = Web3.to_checksum_address(ctf_contract)
 
         # Create SafeTransaction
         txn = SafeTransaction(
-            to=ctf_contract,
+            to=ctf_checksummed,
             operation=OperationType.Call,
             data=calldata,
             value="0",
