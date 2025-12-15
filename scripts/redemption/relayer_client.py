@@ -8,8 +8,9 @@ from typing import Dict, Any, List
 from web3 import Web3
 
 # Import official Polymarket SDK
-from py_builder_relayer_client import RelayClient, BuilderConfig, BuilderApiKeyCreds
-from py_builder_relayer_client.data_models import SafeTransaction
+from py_builder_relayer_client.client import RelayClient
+from py_builder_relayer_client.models import SafeTransaction
+from py_builder_signing_sdk.config import BuilderConfig, BuilderApiKeyCreds
 
 logger = logging.getLogger(__name__)
 
