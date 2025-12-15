@@ -3,6 +3,7 @@
 # Polymarket SDK
 py-builder-relayer-client
 py-builder-signing-sdk
+poly-eip712-structs
 
 # Web3 and Ethereum
 web3==6.15.1
