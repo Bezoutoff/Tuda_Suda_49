@@ -95,7 +95,14 @@ class BuilderRelayerClient:
             ]
         )
 
-        calldata = '0x' + function_selector.hex() + encoded_params.hex()
+        # Combine selector + params (both are bytes, not hex strings)
+        calldata_bytes = function_selector + encoded_params
+        calldata = calldata_bytes.hex()
+
+        # Add 0x prefix if not present
+        if not calldata.startswith('0x'):
+            calldata = '0x' + calldata
+
         return calldata
 
     def submit_redemption(
