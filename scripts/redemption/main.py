@@ -30,7 +30,7 @@ def setup_logging(log_file_path: str) -> None:
 
     # Configure logging
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,  # Changed to DEBUG for troubleshooting
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
         handlers=[
             logging.StreamHandler(sys.stdout),
