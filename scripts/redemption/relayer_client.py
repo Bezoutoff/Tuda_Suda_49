@@ -9,7 +9,7 @@ from web3 import Web3
 
 # Import official Polymarket SDK
 from py_builder_relayer_client.client import RelayClient
-from py_builder_relayer_client.models import SafeTransaction
+from py_builder_relayer_client.models import SafeTransaction, OperationType
 from py_builder_signing_sdk.config import BuilderConfig, BuilderApiKeyCreds
 
 logger = logging.getLogger(__name__)
@@ -127,6 +127,7 @@ class BuilderRelayerClient:
         # Create SafeTransaction
         txn = SafeTransaction(
             to=ctf_contract,
+            operation=OperationType.Call,
             data=calldata,
             value="0",
         )
