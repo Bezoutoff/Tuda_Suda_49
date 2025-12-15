@@ -645,8 +645,58 @@ await Promise.all(inFlightRequests);
 
 **Формула:** `expirationBuffer = желаемое_время_до_старта - 60`
 
+## Redemption Bot - Текущий Статус (2025-12-15)
+
+### ✅ Что работает:
+1. **API парсинг**: Находит redeemable позиции (18 шт, $968 USDC)
+   - Исправлены названия полей: `conditionId`, `asset`, `title` (camelCase)
+   - Корректный парсинг `outcome` (строки "Yes"/"No" и числа)
+2. **SDK интеграция**: py-builder-relayer-client успешно установлен
+3. **Calldata формирование**: redeemPositions() calldata генерируется правильно
+4. **SafeTransaction**: Создаётся с правильными параметрами
+5. **Systemd timer**: Исправлен (убран Restart=on-failure loop)
+
+### ❌ Текущая проблема: 401 Authorization Error
+
+```
+POST /submit HTTP/1.1" 401 34
+RelayerApiException[status_code=401, error_message={'error': 'invalid authorization'}]
+```
+
+**Возможные причины:**
+1. CLOB credentials (API_KEY, SECRET, PASSPHRASE) не подходят для Relayer API
+2. Нужны отдельные Builder credentials для relayer
+3. Wallet не зарегистрирован в Builder программе Polymarket
+4. Неправильная подпись транзакции
+
+**Что проверить:**
+- [ ] Валидны ли CLOB credentials для relayer endpoint
+- [ ] Нужна ли регистрация в Polymarket Builder программе
+- [ ] Есть ли отдельные credentials для relayer
+- [ ] Возможно нужен другой подход (прямая транзакция вместо relayer)
+
+**Файлы для отладки:**
+- `scripts/redemption/relayer_client.py` - RelayClient инициализация
+- `scripts/redemption/config.py` - Credentials загрузка
+- `.env` - CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE
+
+**Логи с DEBUG:**
+```
+[DEBUG] RelayClient: Created transaction request: {...}
+[DEBUG] https://relayer-v2.polymarket.com:443 "POST /submit HTTP/1.1" 401 34
+[ERROR] RelayerApiException[status_code=401, error_message={'error': 'invalid authorization'}]
+```
+
+**Альтернативные подходы:**
+1. Использовать прямые транзакции (нужен газ MATIC)
+2. Найти правильные Builder credentials
+3. Использовать другой метод redemption (если есть)
+
+---
+
 ## История
 
+- **2025-12-15**: Redemption Bot debugging - исправлены API парсинг, SDK интеграция, calldata формирование. Осталась проблема 401 авторизации с relayer.
 - **2025-12-14**: Redemption Bot - автоматический выкуп позиций (Python, systemd timer, Telegram уведомления)
 - **2025-12-09**: Fix expirationBuffer - учёт +60 сек от Polymarket
 - **2025-12-08**: Python визуализация latency (plot_latency.py), тёмная тема, подписи значений
