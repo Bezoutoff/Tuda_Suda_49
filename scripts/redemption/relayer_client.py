@@ -152,15 +152,20 @@ class BuilderRelayerClient:
 
         logger.debug(f"Calldata: {calldata}")
 
-        # For now, we'll use Polymarket's /redeem endpoint if it exists
-        # Otherwise, this would need to be a direct blockchain transaction
-        # Let's try the /redeem endpoint approach first
+        # Use /execute endpoint (Relayer API) to submit transaction
+        # https://docs.polymarket.com/developers/builders/relayer-client
+        path = '/execute'
 
-        path = '/redeem'
+        # Build transaction object
+        transaction = {
+            'to': ctf_contract,
+            'data': calldata,
+            'value': '0',
+        }
+
         payload = {
-            'conditionId': condition_id,
-            'indexSets': index_sets,
-            'parentCollectionId': parent_collection_id,
+            'transactions': [transaction],
+            'label': f'Redeem position {condition_id[:8]}...',
         }
 
         body = json.dumps(payload)
