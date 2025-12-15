@@ -1,5 +1,8 @@
 # Python dependencies for Polymarket Redemption Bot
 
+# Polymarket SDK
+py-builder-relayer-client
+
 # Web3 and Ethereum
 web3==6.15.1
 eth-account==0.11.0

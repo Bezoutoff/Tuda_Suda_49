@@ -25,7 +25,7 @@ class RedemptionConfig:
 
     # API endpoints
     positions_api_url: str = "https://data-api.polymarket.com/positions"
-    relayer_api_url: str = "https://clob.polymarket.com"  # Use CLOB for now, may need different endpoint
+    relayer_api_url: str = "https://relayer-v2.polymarket.com"  # Production relayer for Polygon mainnet
 
     # CTF contract and USDC
     ctf_contract: str = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
