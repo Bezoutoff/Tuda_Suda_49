@@ -23,6 +23,8 @@ import { OrderType } from '@polymarket/clob-client';
 // Paths
 const LATENCY_LOG_FILE = path.join(__dirname, '..', '..', 'updown-bot.csv');
 const CPP_BINARY = path.join(__dirname, '..', '..', 'dist', 'updown-bot-cpp');
+const STATE_DIR = path.join(__dirname, '..', '..', '.bot-state');
+const STATE_FILE_PREFIX = 'updown-bot-state-';
 
 // CSV header (22 columns - added order_index and expiration_buffer)
 const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,accepting_orders_timestamp,order_index,side,price,size,expiration_buffer,latency_ms,status,order_id,attempt,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source\n';
@@ -77,6 +79,37 @@ function initLatencyLog() {
     fs.writeFileSync(LATENCY_LOG_FILE, CSV_HEADER);
   }
 }
+
+// State management
+function getStateFilePath(pattern: string): string {
+  if (!fs.existsSync(STATE_DIR)) {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+  }
+  return path.join(STATE_DIR, `${STATE_FILE_PREFIX}${pattern}.json`);
+}
+
+function loadLastProcessedTimestamp(pattern: string): number | null {
+  const stateFile = getStateFilePath(pattern);
+  if (!fs.existsSync(stateFile)) {
+    return null;
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    return data.lastProcessedTimestamp || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastProcessedTimestamp(pattern: string, timestamp: number) {
+  const stateFile = getStateFilePath(pattern);
+  const state = { lastProcessedTimestamp: timestamp, updatedAt: new Date().toISOString() };
+  fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+  log(`Saved state: last processed = ${timestamp} (${new Date(timestamp * 1000).toLocaleString('ru-RU')})`);
+}
+
+// Note: Duplicate order prevention is handled by state management
+// State file tracks last processed timestamp, preventing reprocessing on restart
 
 // Update cached server time
 async function updateServerTime(): Promise<void> {
@@ -422,7 +455,7 @@ async function spamAllOrders(
 /**
  * Run bot for single market
  */
-async function runMarket(slug: string, marketTimestamp: number) {
+async function runMarket(slug: string, marketTimestamp: number, pattern: string, tradingService: TradingService, walletAddress: string) {
   // Initialize latency logging
   initLatencyLog();
 
@@ -443,23 +476,6 @@ async function runMarket(slug: string, marketTimestamp: number) {
     log('ERROR: C++ binary not found. Run: npm run build:updown-bot');
     process.exit(1);
   }
-
-  // Validate config
-  if (!validateTradingConfig(tradingConfig)) {
-    log('ERROR: Invalid trading config. Check .env');
-    process.exit(1);
-  }
-
-  // Initialize trading service
-  const tradingService = new TradingService(tradingConfig);
-
-  // Get wallet address
-  const { Wallet } = await import('ethers');
-  const pk = tradingConfig.privateKey.startsWith('0x')
-    ? tradingConfig.privateKey
-    : '0x' + tradingConfig.privateKey;
-  const wallet = new Wallet(pk);
-  const walletAddress = wallet.address;
 
   log(`Wallet address: ${walletAddress}`);
   log(`Funder address: ${tradingConfig.funder}`);
@@ -530,6 +546,11 @@ async function runMarket(slug: string, marketTimestamp: number) {
 
   // ===== PHASE 5: Spawn 10 C++ processes =====
   await spamAllOrders(signedOrders, walletAddress);
+
+  // ===== PHASE 6: Save state after successful completion =====
+  log('');
+  log('--- PHASE 6: Saving state ---');
+  saveLastProcessedTimestamp(pattern, marketTimestamp);
 }
 
 // Main
@@ -552,14 +573,64 @@ async function main() {
   const pattern = match[1]; // e.g., "btc-updown-15m"
   let marketTimestamp: number;
 
+  // Validate config
+  if (!validateTradingConfig(tradingConfig)) {
+    log('ERROR: Invalid trading config. Check .env');
+    process.exit(1);
+  }
+
+  // Initialize trading service
+  const tradingService = new TradingService(tradingConfig);
+
+  // Get wallet address
+  const { Wallet } = await import('ethers');
+  const pk = tradingConfig.privateKey.startsWith('0x')
+    ? tradingConfig.privateKey
+    : '0x' + tradingConfig.privateKey;
+  const wallet = new Wallet(pk);
+  const walletAddress = wallet.address;
+
+  log(`Wallet address: ${walletAddress}`);
+  log(`Funder address: ${tradingConfig.funder}`);
+
+  // Load last processed timestamp
+  const lastProcessed = loadLastProcessedTimestamp(pattern);
+  if (lastProcessed) {
+    log(`Loaded state: last processed = ${lastProcessed} (${new Date(lastProcessed * 1000).toLocaleString('ru-RU')})`);
+  }
+
   // Auto-calculate next market timestamp if "AUTO"
   if (match[2] === 'AUTO') {
     const now = Math.floor(Date.now() / 1000);
-    const remainder = now % INTERVAL_SECONDS;
-    marketTimestamp = now + (INTERVAL_SECONDS - remainder);
-    log(`Auto mode: Starting from next market at ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
+
+    // If we have saved state, start from next market after last processed
+    if (lastProcessed) {
+      // Find next market timestamp after last processed
+      const remainder = lastProcessed % INTERVAL_SECONDS;
+      marketTimestamp = lastProcessed + (INTERVAL_SECONDS - remainder);
+
+      // If that's in the past, find next future market
+      if (marketTimestamp <= now) {
+        const remainderNow = now % INTERVAL_SECONDS;
+        marketTimestamp = now + (INTERVAL_SECONDS - remainderNow);
+      }
+
+      log(`Resuming: Starting from ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')} (after last processed)`);
+    } else {
+      // No saved state - start from next market
+      const remainder = now % INTERVAL_SECONDS;
+      marketTimestamp = now + (INTERVAL_SECONDS - remainder);
+      log(`Auto mode: Starting from next market at ${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')}`);
+    }
   } else {
     marketTimestamp = parseInt(match[2]);
+
+    // Check if this market was already processed
+    if (lastProcessed && marketTimestamp <= lastProcessed) {
+      log(`⚠️  Warning: Market ${marketTimestamp} was already processed (last = ${lastProcessed})`);
+      log(`Jumping to next unprocessed market...`);
+      marketTimestamp = lastProcessed + INTERVAL_SECONDS;
+    }
   }
 
   // Continuous loop
@@ -572,9 +643,11 @@ async function main() {
     log(`${'='.repeat(60)}`);
 
     try {
-      await runMarket(currentSlug, marketTimestamp);
+      await runMarket(currentSlug, marketTimestamp, pattern, tradingService, walletAddress);
     } catch (err: any) {
       log(`Error processing market: ${err.message}`);
+      log(`Saving state and moving to next market...`);
+      saveLastProcessedTimestamp(pattern, marketTimestamp);
     }
 
     // Move to next market (+900 seconds = 15 minutes)

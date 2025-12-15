@@ -23,3 +23,6 @@ Thumbs.db
 
 # Troubleshooting docs (local only)
 TROUBLESHOOTING_CPP_401.md
+
+# Bot state files (runtime state, don't commit)
+.bot-state/
