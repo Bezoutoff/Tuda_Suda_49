@@ -64,30 +64,51 @@ class PolymarketAPI:
 
             logger.info(f"Received {len(data)} total positions")
 
+            # Debug: log first position to see structure
+            if len(data) > 0:
+                logger.debug(f"First position sample: {data[0]}")
+
             # Filter only redeemable positions
             positions = []
+            redeemable_count = 0
             for item in data:
-                # Check if redeemable
+                # Check if redeemable (API uses camelCase: redeemable)
                 if not item.get('redeemable', False):
                     continue
+
+                redeemable_count += 1
 
                 # Get position size
                 size = float(item.get('size', 0))
                 if size <= 0:
+                    logger.debug(f"Skipping position with size={size}")
                     continue
 
-                # Extract fields (from Data API response format)
+                # Parse outcome - API returns string like "Yes", "No", "0", "1"
+                outcome_str = item.get('outcome', '0')
+                try:
+                    # Try to convert to int (for markets with numeric outcomes)
+                    outcome_index = int(outcome_str)
+                except ValueError:
+                    # Handle string outcomes: "Yes" -> 0, "No" -> 1
+                    outcome_index = 1 if outcome_str.lower() in ['no', 'down'] else 0
+
+                # Extract fields (API uses camelCase)
                 position = Position(
-                    asset=item.get('asset_id', item.get('token_id', '')),
-                    balance=size,  # 'size' field from Data API
-                    condition_id=item.get('condition_id', ''),
-                    outcome_index=int(item.get('outcome', 0)),
-                    market_slug=item.get('market', ''),
-                    market_title=item.get('question', 'Unknown'),
+                    asset=item.get('asset', ''),
+                    balance=size,
+                    condition_id=item.get('conditionId', ''),
+                    outcome_index=outcome_index,
+                    market_slug=item.get('slug', ''),
+                    market_title=item.get('title', 'Unknown'),
                 )
+
+                logger.debug(f"Position: {position.market_slug} - {position.market_title}, "
+                           f"outcome={outcome_str}, size={size}")
+
                 positions.append(position)
 
-            logger.info(f"Found {len(positions)} positions with balance > 0")
+            logger.info(f"Found {redeemable_count} redeemable positions, {len(positions)} with balance > 0")
             return positions
 
         except requests.Timeout:

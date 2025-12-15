@@ -19,9 +19,7 @@ SyslogIdentifier=redemption-bot
 NoNewPrivileges=true
 PrivateTmp=true
 
-# Restart on failure
-Restart=on-failure
-RestartSec=5min
+# No restart - timer controls execution schedule
 
 [Install]
 WantedBy=multi-user.target
