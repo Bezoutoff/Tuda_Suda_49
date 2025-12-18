@@ -20,6 +20,7 @@ from redemption.redemption_logic import group_positions_by_condition, should_red
 from redemption.relayer_client import BuilderRelayerClient, AlreadyClaimedException
 from redemption.telegram_notifier import TelegramNotifier
 from redemption.csv_logger import CSVLogger
+from redemption.redeemed_tracker import RedeemedTracker
 
 
 def setup_logging(log_file_path: str) -> None:
@@ -77,6 +78,9 @@ def main() -> int:
         )
         telegram = TelegramNotifier(config.telegram_bot_token, config.telegram_chat_id)
         csv_logger = CSVLogger(config.csv_log_path)
+        redeemed_tracker = RedeemedTracker(config.csv_log_path)
+
+        logger.info(f"Загружено {redeemed_tracker.get_redeemed_count()} ранее выкупленных условий")
 
         # 3. Notify start
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -97,7 +101,34 @@ def main() -> int:
 
         total_usdc = sum(g.total_amount / 1e6 for g in redemption_groups)
         logger.info(f"Found {len(redemption_groups)} conditions, ${total_usdc:.2f} USDC")
-        telegram.notify_positions_found(len(redemption_groups), total_usdc)
+
+        # 5.1. Filter out already redeemed conditions
+        filtered_groups = []
+        skipped_count = 0
+        skipped_usdc = 0.0
+
+        for group in redemption_groups:
+            if redeemed_tracker.is_already_redeemed(group.condition_id):
+                logger.debug(f"[SKIP] Already redeemed: {group.condition_id[:8]}...")
+                skipped_count += 1
+                skipped_usdc += group.total_amount / 1e6
+            else:
+                filtered_groups.append(group)
+
+        logger.info(
+            f"Filtered: {len(filtered_groups)} to redeem (${sum(g.total_amount / 1e6 for g in filtered_groups):.2f}), "
+            f"{skipped_count} already redeemed (${skipped_usdc:.2f})"
+        )
+
+        redemption_groups = filtered_groups
+
+        # Early exit if nothing to redeem
+        if not redemption_groups:
+            logger.info("All positions already redeemed, nothing to do")
+            telegram.notify_no_positions()
+            return 0
+
+        telegram.notify_positions_found(len(redemption_groups), sum(g.total_amount / 1e6 for g in redemption_groups))
 
         # 6. Process each redemption group
         success_count = 0
@@ -142,6 +173,7 @@ def main() -> int:
                 )
 
                 success_count += 1
+                redeemed_tracker.mark_as_redeemed(group.condition_id)
                 logger.info(f"[OK] Redemption successful: {group.condition_id[:8]}...")
 
             except AlreadyClaimedException as e:
@@ -182,6 +214,7 @@ def main() -> int:
         logger.info("Redemption Summary:")
         logger.info(f"  [OK] Success: {success_count}")
         logger.info(f"  [SKIP] Already claimed: {already_claimed_count}")
+        logger.info(f"  [SKIP] Previously redeemed: {skipped_count}")
         logger.info(f"  [ERROR] Errors: {error_count}")
         logger.info(f"  Total processed: {len(redemption_groups)}")
         logger.info("=" * 60)
