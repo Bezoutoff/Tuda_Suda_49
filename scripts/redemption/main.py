@@ -142,11 +142,11 @@ def main() -> int:
                 )
 
                 success_count += 1
-                logger.info(f"✓ Redemption successful: {group.condition_id[:8]}...")
+                logger.info(f"[OK] Redemption successful: {group.condition_id[:8]}...")
 
             except AlreadyClaimedException as e:
                 # Position already claimed - not an error, just skip
-                logger.info(f"○ Already claimed: {group.condition_id[:8]}...")
+                logger.info(f"[SKIP] Already claimed: {group.condition_id[:8]}...")
 
                 # Log as already_claimed (not error)
                 csv_logger.log_redemption(
@@ -162,7 +162,7 @@ def main() -> int:
 
             except Exception as e:
                 error_msg = str(e)
-                logger.error(f"✗ Redemption failed for {group.condition_id[:8]}...: {error_msg}")
+                logger.error(f"[ERROR] Redemption failed for {group.condition_id[:8]}...: {error_msg}")
 
                 # Log error
                 csv_logger.log_redemption(
@@ -180,9 +180,9 @@ def main() -> int:
         # 7. Summary
         logger.info("=" * 60)
         logger.info("Redemption Summary:")
-        logger.info(f"  ✓ Success: {success_count}")
-        logger.info(f"  ○ Already claimed: {already_claimed_count}")
-        logger.info(f"  ✗ Errors: {error_count}")
+        logger.info(f"  [OK] Success: {success_count}")
+        logger.info(f"  [SKIP] Already claimed: {already_claimed_count}")
+        logger.info(f"  [ERROR] Errors: {error_count}")
         logger.info(f"  Total processed: {len(redemption_groups)}")
         logger.info("=" * 60)
 
