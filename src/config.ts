@@ -17,12 +17,19 @@ export const BOT_CONFIG = {
   // Order config: price + size + expiration buffer (seconds before market start)
   // NOTE: Polymarket adds +60 sec to expiration, so we subtract 60 from desired value
   ORDER_CONFIG: [
-    { price: 0.46, size: 14,  expirationBuffer: 60 },   // 2 мин до старта (120-60)
-    { price: 0.45, size: 20, expirationBuffer: -30 },  // 30 сек до старта (30-60)
-    { price: 0.44, size: 22, expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.43, size: 24, expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.42, size: 26, expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.41, size: 28,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
+ //   { price: 0.46, size: 10,  expirationBuffer: 60 },   // 2 мин до старта (120-60)
+ //   { price: 0.45, size: 15, expirationBuffer: -30 },  // 30 сек до старта (30-60)
+    { price: 0.44, size: 10, expirationBuffer: -57 },  // 2 сек до старта (1-60)
+    { price: 0.43, size: 20, expirationBuffer: -57 },  // 2 сек до старта (1-60)
+    { price: 0.42, size: 25, expirationBuffer: -58 },  // 2 сек до старта (1-60)
+    { price: 0.41, size: 30,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
+    { price: 0.40, size: 35,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
+    { price: 0.39, size: 40,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
+    { price: 0.38, size: 45,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
+    { price: 0.37, size: 50,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
+    { price: 0.35, size: 70,  expirationBuffer: -59 },  // 2 сек до старта (1-60)
+    { price: 0.31, size: 100,  expirationBuffer: -59 },  // 2 сек до старта (1-60)
+    { price: 0.21, size: 200,  expirationBuffer: -59 },  // 2 сек до старта (1-60)
     { price: 0.11, size: 400,  expirationBuffer: -59 },  // 1 сек до старта (1-60)
   ],
 
