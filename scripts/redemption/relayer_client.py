@@ -15,6 +15,11 @@ from py_builder_signing_sdk.config import BuilderConfig, BuilderApiKeyCreds
 logger = logging.getLogger(__name__)
 
 
+class AlreadyClaimedException(Exception):
+    """Position already claimed - not an error, just skip"""
+    pass
+
+
 class BuilderRelayerClient:
     """
     Client for Polymarket Builder Relayer using official SDK.
@@ -163,5 +168,21 @@ class BuilderRelayerClient:
             return result
 
         except Exception as e:
+            error_msg = str(e).lower()
+            logger.debug(f"Relayer error details: {e}")
+
+            # Check if position already claimed (common error patterns)
+            if any(pattern in error_msg for pattern in [
+                'already redeemed',
+                'no balance',
+                'balance is 0',
+                'nothing to redeem',
+                'position already claimed',
+                'insufficient balance',
+            ]):
+                logger.debug(f"Position already claimed: {condition_id[:8]}...")
+                raise AlreadyClaimedException(f"Position {condition_id[:8]}... already claimed")
+
+            # Other errors
             logger.error(f"Relayer execution failed: {e}")
             raise

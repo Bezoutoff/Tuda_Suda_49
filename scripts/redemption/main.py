@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from redemption.config import load_config, validate_config
 from redemption.polymarket_api import PolymarketAPI
 from redemption.redemption_logic import group_positions_by_condition, should_redeem_group
-from redemption.relayer_client import BuilderRelayerClient
+from redemption.relayer_client import BuilderRelayerClient, AlreadyClaimedException
 from redemption.telegram_notifier import TelegramNotifier
 from redemption.csv_logger import CSVLogger
 
@@ -101,6 +101,7 @@ def main() -> int:
 
         # 6. Process each redemption group
         success_count = 0
+        already_claimed_count = 0
         error_count = 0
 
         for group in redemption_groups:
@@ -143,9 +144,25 @@ def main() -> int:
                 success_count += 1
                 logger.info(f"✓ Redemption successful: {group.condition_id[:8]}...")
 
+            except AlreadyClaimedException as e:
+                # Position already claimed - not an error, just skip
+                logger.info(f"○ Already claimed: {group.condition_id[:8]}...")
+
+                # Log as already_claimed (not error)
+                csv_logger.log_redemption(
+                    condition_id=group.condition_id,
+                    parent_collection_id=group.parent_collection_id,
+                    index_sets=group.index_sets,
+                    amount_usdc=group.total_amount / 1e6,
+                    status='already_claimed',
+                )
+
+                already_claimed_count += 1
+                # Don't notify Telegram for already claimed (too noisy)
+
             except Exception as e:
                 error_msg = str(e)
-                logger.error(f"Redemption failed for {group.condition_id[:8]}...: {error_msg}")
+                logger.error(f"✗ Redemption failed for {group.condition_id[:8]}...: {error_msg}")
 
                 # Log error
                 csv_logger.log_redemption(
@@ -162,7 +179,11 @@ def main() -> int:
 
         # 7. Summary
         logger.info("=" * 60)
-        logger.info(f"Redemption complete: {success_count} success, {error_count} errors")
+        logger.info("Redemption Summary:")
+        logger.info(f"  ✓ Success: {success_count}")
+        logger.info(f"  ○ Already claimed: {already_claimed_count}")
+        logger.info(f"  ✗ Errors: {error_count}")
+        logger.info(f"  Total processed: {len(redemption_groups)}")
         logger.info("=" * 60)
 
         return 0 if error_count == 0 else 1
