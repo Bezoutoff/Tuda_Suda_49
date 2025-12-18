@@ -66,4 +66,4 @@ class CSVLogger:
                 error or '',
             ])
 
-        logger.info(f"Logged redemption: {condition_id[:8]}... → {status}")
+        logger.info(f"Logged redemption: {condition_id[:8]}... -> {status}")
