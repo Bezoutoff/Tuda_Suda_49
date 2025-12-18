@@ -480,44 +480,61 @@ async function runMarket(slug: string, marketTimestamp: number, pattern: string,
   log(`Wallet address: ${walletAddress}`);
   log(`Funder address: ${tradingConfig.funder}`);
 
-  // ===== PHASE 1: Polling =====
+  // ===== PHASE 1: Polling for market (with retry) =====
   log('');
   log('--- PHASE 1: Polling for market ---');
 
-  let pollCount = 0;
-  const pollStart = Date.now();
+  const MAX_RETRIES = 2;
+  const POLL_TIMEOUT_PER_RETRY = 18 * 60 * 1000; // 18 minutes
+
   let market: { yesTokenId: string; noTokenId: string; acceptingOrdersTimestamp?: string } | null = null;
 
-  while (!market) {
-    pollCount++;
-
-    if (Date.now() - pollStart > 20 * 60 * 1000) {
-      log('ERROR: Polling timeout (20 min)');
-      process.exit(1);
+  for (let retryAttempt = 1; retryAttempt <= MAX_RETRIES && !market; retryAttempt++) {
+    if (retryAttempt > 1) {
+      log(`Retry ${retryAttempt}/${MAX_RETRIES} - trying again...`);
     }
 
-    market = await fetchMarketBySlug(slug);
+    let pollCount = 0;
+    const pollStart = Date.now();
 
-    if (market) {
-      const pollElapsed = Math.round((Date.now() - pollStart) / 1000);
-      log(`Market found! (${pollCount} polls, ${pollElapsed}s)`);
-      log(`YES Token: ${market.yesTokenId.slice(0, 20)}...`);
-      log(`NO Token: ${market.noTokenId.slice(0, 20)}...`);
+    while (!market) {
+      pollCount++;
 
-      // Save acceptingOrdersTimestamp
-      acceptingOrdersTimestamp = market.acceptingOrdersTimestamp;
-      if (acceptingOrdersTimestamp) {
-        log(`Accepting orders since: ${new Date(acceptingOrdersTimestamp).toLocaleString('ru-RU')}`);
-      } else {
-        log(`Accepting orders: not yet (orderbook inactive)`);
-      }
-    } else {
-      if (pollCount % 100 === 0) {
+      // Check timeout for this retry
+      if (Date.now() - pollStart > POLL_TIMEOUT_PER_RETRY) {
         const elapsed = Math.round((Date.now() - pollStart) / 1000);
-        log(`Polling... ${pollCount} requests, ${elapsed}s`);
+        log(`Polling timeout after ${elapsed}s (attempt ${retryAttempt}/${MAX_RETRIES})`);
+        break; // Break inner loop, continue with next retry
       }
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+      market = await fetchMarketBySlug(slug);
+
+      if (market) {
+        const pollElapsed = Math.round((Date.now() - pollStart) / 1000);
+        log(`Market found! (${pollCount} polls, ${pollElapsed}s, attempt ${retryAttempt})`);
+        log(`YES Token: ${market.yesTokenId.slice(0, 20)}...`);
+        log(`NO Token: ${market.noTokenId.slice(0, 20)}...`);
+
+        // Save acceptingOrdersTimestamp
+        acceptingOrdersTimestamp = market.acceptingOrdersTimestamp;
+        if (acceptingOrdersTimestamp) {
+          log(`Accepting orders since: ${new Date(acceptingOrdersTimestamp).toLocaleString('ru-RU')}`);
+        } else {
+          log(`Accepting orders: not yet (orderbook inactive)`);
+        }
+      } else {
+        if (pollCount % 100 === 0) {
+          const elapsed = Math.round((Date.now() - pollStart) / 1000);
+          log(`Polling... ${pollCount} requests, ${elapsed}s (attempt ${retryAttempt}/${MAX_RETRIES})`);
+        }
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+      }
     }
+  }
+
+  // If still not found after all retries - throw error
+  if (!market) {
+    throw new Error(`Market not found after ${MAX_RETRIES} attempts (${MAX_RETRIES * 18} minutes total): ${slug}`);
   }
 
   // ===== PHASE 2: Pre-sign all 10 orders =====
