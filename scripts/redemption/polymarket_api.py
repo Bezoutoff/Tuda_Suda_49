@@ -71,12 +71,17 @@ class PolymarketAPI:
             # Filter only redeemable positions
             positions = []
             redeemable_count = 0
+            filtered_count = 0
             for item in data:
                 # Check if redeemable (API uses camelCase: redeemable)
-                if not item.get('redeemable', False):
+                is_redeemable = item.get('redeemable', False)
+                if not is_redeemable:
+                    filtered_count += 1
+                    logger.debug(f"Filtered out (redeemable={is_redeemable}): {item.get('slug', 'unknown')}")
                     continue
 
                 redeemable_count += 1
+                logger.debug(f"Redeemable position found: {item.get('slug', 'unknown')}, size={item.get('size', 0)}")
 
                 # Get position size
                 size = float(item.get('size', 0))
@@ -108,7 +113,7 @@ class PolymarketAPI:
 
                 positions.append(position)
 
-            logger.info(f"Found {redeemable_count} redeemable positions, {len(positions)} with balance > 0")
+            logger.info(f"Total positions: {len(data)}, Filtered out: {filtered_count}, Redeemable: {redeemable_count}, With balance > 0: {len(positions)}")
             return positions
 
         except requests.Timeout:

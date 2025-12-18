@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from redemption.config import load_config, validate_config
 from redemption.polymarket_api import PolymarketAPI
 from redemption.redemption_logic import group_positions_by_condition, should_redeem_group
-from redemption.direct_redemption_client import DirectRedemptionClient
+from redemption.relayer_client import BuilderRelayerClient
 from redemption.telegram_notifier import TelegramNotifier
 from redemption.csv_logger import CSVLogger
 
@@ -67,10 +67,12 @@ def main() -> int:
         # 2. Initialize components
         logger.info("Initializing components...")
         api_client = PolymarketAPI(config.positions_api_url, config.funder_address)
-        redemption_client = DirectRedemptionClient(
-            config.polygon_rpc_url,
+        relayer_client = BuilderRelayerClient(
+            config.relayer_api_url,
             config.private_key,
-            config.ctf_contract,
+            config.builder_api_key,
+            config.builder_secret,
+            config.builder_passphrase,
             config.chain_id,
         )
         telegram = TelegramNotifier(config.telegram_bot_token, config.telegram_chat_id)
@@ -111,7 +113,7 @@ def main() -> int:
             try:
                 # Submit redemption
                 logger.info(f"Processing redemption for {group.condition_id[:8]}...")
-                result = redemption_client.submit_redemption(
+                result = relayer_client.submit_redemption(
                     ctf_contract=config.ctf_contract,
                     collateral_token=config.collateral_token,
                     parent_collection_id=group.parent_collection_id,

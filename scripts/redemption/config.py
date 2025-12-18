@@ -21,10 +21,10 @@ class RedemptionConfig:
     wallet_address: str
     funder_address: str
 
-    # Builder Relayer credentials (same as CLOB)
-    api_key: str
-    secret: str
-    passphrase: str
+    # Builder Relayer credentials (separate from CLOB)
+    builder_api_key: str
+    builder_secret: str
+    builder_passphrase: str
 
     # API endpoints
     positions_api_url: str = "https://data-api.polymarket.com/positions"
@@ -70,13 +70,13 @@ def load_config() -> RedemptionConfig:
     if not funder_address:
         raise ValueError("FUNDER not found in .env")
 
-    # Builder Relayer credentials (same as CLOB)
-    api_key = os.getenv('CLOB_API_KEY')
-    secret = os.getenv('CLOB_SECRET')
-    passphrase = os.getenv('CLOB_PASS_PHRASE')
+    # Builder Relayer credentials (separate from CLOB)
+    builder_api_key = os.getenv('BUILDER_API_KEY')
+    builder_secret = os.getenv('BUILDER_SECRET')
+    builder_passphrase = os.getenv('BUILDER_PASSPHRASE')
 
-    if not all([api_key, secret, passphrase]):
-        raise ValueError("Missing Builder Relayer credentials (CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE)")
+    if not all([builder_api_key, builder_secret, builder_passphrase]):
+        raise ValueError("Missing Builder Relayer credentials (BUILDER_API_KEY, BUILDER_SECRET, BUILDER_PASSPHRASE)")
 
     # Telegram (optional)
     telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -87,9 +87,9 @@ def load_config() -> RedemptionConfig:
         private_key=private_key,
         wallet_address=wallet_address,
         funder_address=funder_address,
-        api_key=api_key,
-        secret=secret,
-        passphrase=passphrase,
+        builder_api_key=builder_api_key,
+        builder_secret=builder_secret,
+        builder_passphrase=builder_passphrase,
         telegram_bot_token=telegram_bot_token,
         telegram_chat_id=telegram_chat_id,
     )
@@ -111,7 +111,7 @@ def validate_config(config: RedemptionConfig) -> list[str]:
     if not config.funder_address or not config.funder_address.startswith('0x'):
         errors.append("Invalid funder address")
 
-    if not config.api_key or not config.secret or not config.passphrase:
+    if not config.builder_api_key or not config.builder_secret or not config.builder_passphrase:
         errors.append("Missing Builder Relayer credentials")
 
     return errors
