@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from typing import Optional
 from eth_account import Account
 
+# Polygon RPC URL (can be overridden by POLYGON_RPC_URL env var)
+POLYGON_RPC_URL = os.getenv('POLYGON_RPC_URL', 'https://polygon-rpc.com')
+
 
 @dataclass
 class RedemptionConfig:
@@ -26,6 +29,7 @@ class RedemptionConfig:
     # API endpoints
     positions_api_url: str = "https://data-api.polymarket.com/positions"
     relayer_api_url: str = "https://relayer-v2.polymarket.com"  # Production relayer for Polygon mainnet
+    polygon_rpc_url: str = POLYGON_RPC_URL  # Polygon RPC for direct transactions
 
     # CTF contract and USDC
     ctf_contract: str = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
