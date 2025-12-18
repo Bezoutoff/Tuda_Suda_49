@@ -625,11 +625,12 @@ async function main() {
   } else {
     marketTimestamp = parseInt(match[2]);
 
-    // Check if this market was already processed
+    // Manual mode: use exact timestamp specified by user
+    log(`Manual mode: Using timestamp ${marketTimestamp} (${new Date(marketTimestamp * 1000).toLocaleString('ru-RU')})`);
+
+    // Warn if already processed, but still use it (user explicitly requested it)
     if (lastProcessed && marketTimestamp <= lastProcessed) {
-      log(`⚠️  Warning: Market ${marketTimestamp} was already processed (last = ${lastProcessed})`);
-      log(`Jumping to next unprocessed market...`);
-      marketTimestamp = lastProcessed + INTERVAL_SECONDS;
+      log(`⚠️  Note: Market ${marketTimestamp} may have been processed before (last = ${lastProcessed})`);
     }
   }
 

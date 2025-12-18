@@ -25,7 +25,7 @@ const LATENCY_LOG_FILE = path.join(__dirname, '..', 'latency.csv');
 const CPP_BINARY = path.join(__dirname, '..', 'dist', 'test-latency-cpp');
 
 // CSV header (unified format with summary stats)
-const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,side,price,size,latency_ms,status,order_id,attempt,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source\n';
+const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,accepting_orders_timestamp,side,price,size,latency_ms,status,order_id,attempt,total_attempts,success_count,first_success_attempt,min_ms,max_ms,avg_ms,median_ms,source\n';
 
 // Test parameters
 const TEST_PRICE = 0.44;
@@ -42,6 +42,7 @@ let cachedServerTime = 0;
 let cachedLocalTime = 0;
 let currentMarketTime = 0;
 let currentSlug = '';
+let acceptingOrdersTimestamp: string | undefined;
 let attemptCounter = 0;
 const latencyRecords: { latencyMs: number; success: boolean; attempt: number; orderId?: string }[] = [];
 
@@ -95,7 +96,8 @@ function writeResult(
   size: number,
   finalLatencyMs: number,
   success: boolean,
-  orderId?: string
+  orderId?: string,
+  acceptingOrdersTs?: string
 ) {
   const serverTimeMs = getServerTimeMs();
   const secToMarket = ((currentMarketTime * 1000) - serverTimeMs) / 1000;
@@ -119,7 +121,8 @@ function writeResult(
     medianMs = sorted[Math.floor(sorted.length / 2)];
   }
 
-  const line = `${serverTimeMs},${currentMarketTime},${secToMarket.toFixed(3)},${slug},${side},${price},${size},${finalLatencyMs},${status},${orderId || ''},${attemptCounter},${totalAttempts},${successCount},${firstSuccessAttempt},${minMs},${maxMs},${avgMs},${medianMs},cpp\n`;
+  const acceptingOrdersTsValue = acceptingOrdersTs || '';
+  const line = `${serverTimeMs},${currentMarketTime},${secToMarket.toFixed(3)},${slug},${acceptingOrdersTsValue},${side},${price},${size},${finalLatencyMs},${status},${orderId || ''},${attemptCounter},${totalAttempts},${successCount},${firstSuccessAttempt},${minMs},${maxMs},${avgMs},${medianMs},cpp\n`;
   fs.appendFileSync(LATENCY_LOG_FILE, line);
 }
 
@@ -129,6 +132,7 @@ function writeResult(
 async function fetchMarketBySlug(slug: string): Promise<{
   yesTokenId: string;
   noTokenId: string;
+  acceptingOrdersTimestamp?: string;
 } | null> {
   try {
     const url = `https://gamma-api.polymarket.com/markets/slug/${slug}`;
@@ -153,9 +157,16 @@ async function fetchMarketBySlug(slug: string): Promise<{
       return null;
     }
 
+    // Get acceptingOrdersTimestamp from markets[0]
+    let acceptingOrdersTimestamp: string | undefined;
+    if (market.markets && Array.isArray(market.markets) && market.markets[0]) {
+      acceptingOrdersTimestamp = market.markets[0].acceptingOrdersTimestamp;
+    }
+
     return {
       yesTokenId: clobTokenIds[0],
       noTokenId: clobTokenIds[1],
+      acceptingOrdersTimestamp,
     };
   } catch {
     return null;
@@ -172,6 +183,7 @@ async function runTest(slug: string, marketTimestamp: number) {
   // Set global state for logging
   currentMarketTime = marketTimestamp;
   currentSlug = slug;
+  acceptingOrdersTimestamp = undefined;
   attemptCounter = 0;
   latencyRecords.length = 0;
 
@@ -203,7 +215,7 @@ async function runTest(slug: string, marketTimestamp: number) {
 
   let pollCount = 0;
   const pollStart = Date.now();
-  let market: { yesTokenId: string; noTokenId: string } | null = null;
+  let market: { yesTokenId: string; noTokenId: string; acceptingOrdersTimestamp?: string } | null = null;
 
   while (!market) {
     pollCount++;
@@ -220,6 +232,14 @@ async function runTest(slug: string, marketTimestamp: number) {
       log(`Market found! (${pollCount} polls, ${pollElapsed}s)`);
       log(`YES Token: ${market.yesTokenId.slice(0, 20)}...`);
       log(`NO Token: ${market.noTokenId.slice(0, 20)}...`);
+
+      // Save acceptingOrdersTimestamp
+      acceptingOrdersTimestamp = market.acceptingOrdersTimestamp;
+      if (acceptingOrdersTimestamp) {
+        log(`Accepting orders since: ${new Date(acceptingOrdersTimestamp).toLocaleString('ru-RU')}`);
+      } else {
+        log(`Accepting orders: not yet (orderbook inactive)`);
+      }
     } else {
       if (pollCount % 100 === 0) {
         const elapsed = Math.round((Date.now() - pollStart) / 1000);
@@ -384,7 +404,7 @@ async function runTest(slug: string, marketTimestamp: number) {
       if (orderId) {
         log('  >>> Raw HTTP works! Order placed.');
         trackLatency(rawLatency, true, orderId);
-        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, true, orderId);
+        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), rawLatency, true, orderId, acceptingOrdersTimestamp);
         log(`Result written to: ${LATENCY_LOG_FILE}`);
         // Order was placed, skip C++ for this market
         return;
@@ -487,10 +507,10 @@ async function runTest(slug: string, marketTimestamp: number) {
       // Write result to CSV (find the successful order if any)
       const successRecord = latencyRecords.find(r => r.success);
       if (successRecord) {
-        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), successRecord.latencyMs, true, successRecord.orderId);
+        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), successRecord.latencyMs, true, successRecord.orderId, acceptingOrdersTimestamp);
       } else if (latencyRecords.length > 0) {
         const lastRecord = latencyRecords[latencyRecords.length - 1];
-        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), lastRecord.latencyMs, false);
+        writeResult(slug, 'UP', TEST_PRICE, getOrderSize(), lastRecord.latencyMs, false, undefined, acceptingOrdersTimestamp);
       }
       log(`Result written to: ${LATENCY_LOG_FILE}`);
 

@@ -15,7 +15,19 @@
       "Bash(node -e:*)",
       "Bash(node:*)",
       "Bash(git rm:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run fill-timestamps:*)",
+      "Bash(awk:*)",
+      "Bash(npm run analyze-timing:*)",
+      "Bash(chmod:*)",
+      "Bash(npm run build:updown-bot:*)",
+      "WebFetch(domain:docs.polymarket.com)",
+      "WebSearch",
+      "WebFetch(domain:pastebin.com)",
+      "WebFetch(domain:octopus.catnarok.net)",
+      "Bash(tree:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []
