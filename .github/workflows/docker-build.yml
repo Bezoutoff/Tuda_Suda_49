@@ -1,0 +1,242 @@
+name: Docker Build CI
+
+# Trigger on push to main or pull requests
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docker-build.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docker-build.yml'
+
+# Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  # ===========================================================================
+  # Job 1: Build Docker Image (with C++)
+  # ===========================================================================
+  build-with-cpp:
+    name: Build Docker Image (C++ enabled)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image with C++
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          build-args: |
+            BUILD_CPP=true
+          tags: tuda-suda-49:test-cpp
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test image exists
+        run: docker images | grep tuda-suda-49
+
+  # ===========================================================================
+  # Job 2: Build Docker Image (without C++)
+  # ===========================================================================
+  build-without-cpp:
+    name: Build Docker Image (C++ disabled)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image without C++
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          build-args: |
+            BUILD_CPP=false
+          tags: tuda-suda-49:test-no-cpp
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test image exists
+        run: docker images | grep tuda-suda-49
+
+  # ===========================================================================
+  # Job 3: Test docker-compose
+  # ===========================================================================
+  test-compose:
+    name: Test docker-compose
+    runs-on: ubuntu-latest
+    needs: [build-with-cpp]  # Run after build succeeds
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create dummy .env file
+        run: |
+          cat > .env << 'EOF'
+          PK=0000000000000000000000000000000000000000000000000000000000000000
+          CLOB_API_KEY=test_api_key
+          CLOB_SECRET=test_secret
+          CLOB_PASS_PHRASE=test_passphrase
+          FUNDER=0x0000000000000000000000000000000000000000
+          BOT_ORDER_SIZE=1
+          EOF
+
+      - name: Test docker-compose config
+        run: docker-compose config
+
+      - name: Build with docker-compose
+        run: docker-compose build
+
+      - name: Verify images built
+        run: |
+          docker images | grep tuda_suda_49
+          echo "✅ docker-compose build successful"
+
+      - name: Test container startup (dry run)
+        run: |
+          # Start containers in background
+          docker-compose up -d
+
+          # Wait for containers to initialize
+          sleep 30
+
+          # Check container status
+          docker-compose ps
+
+          # Check logs for errors
+          docker-compose logs --tail=50
+
+          # Stop containers
+          docker-compose down
+
+  # ===========================================================================
+  # Job 4: Security Scan (Trivy)
+  # ===========================================================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [build-with-cpp]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          build-args: |
+            BUILD_CPP=false
+          tags: tuda-suda-49:scan
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'tuda-suda-49:scan'
+          format: 'table'
+          exit-code: '0'  # Don't fail on vulnerabilities (informational only)
+          severity: 'CRITICAL,HIGH'
+
+  # ===========================================================================
+  # Job 5: Docker Image Size Check
+  # ===========================================================================
+  size-check:
+    name: Docker Image Size Check
+    runs-on: ubuntu-latest
+    needs: [build-with-cpp, build-without-cpp]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build both variants
+        run: |
+          # Build with C++
+          docker build --build-arg BUILD_CPP=true -t tuda-suda-49:with-cpp .
+
+          # Build without C++
+          docker build --build-arg BUILD_CPP=false -t tuda-suda-49:no-cpp .
+
+      - name: Compare image sizes
+        run: |
+          echo "=== Docker Image Sizes ==="
+          docker images | grep tuda-suda-49
+
+          SIZE_WITH_CPP=$(docker images tuda-suda-49:with-cpp --format "{{.Size}}")
+          SIZE_NO_CPP=$(docker images tuda-suda-49:no-cpp --format "{{.Size}}")
+
+          echo ""
+          echo "📊 Image Size Summary:"
+          echo "  With C++:    $SIZE_WITH_CPP"
+          echo "  Without C++: $SIZE_NO_CPP"
+          echo ""
+          echo "ℹ️  Expected size: ~800MB with C++, ~600MB without C++"
+
+  # ===========================================================================
+  # Job 6: Lint Dockerfiles (hadolint)
+  # ===========================================================================
+  lint:
+    name: Lint Dockerfile
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          ignore: DL3008,DL3009  # Ignore pinning apt package versions
+          failure-threshold: warning
+
+# ===========================================================================
+# Summary
+# ===========================================================================
+# This workflow validates Docker builds on every push/PR:
+#
+# ✅ Builds with C++ enabled (full functionality)
+# ✅ Builds with C++ disabled (faster build)
+# ✅ Tests docker-compose configuration
+# ✅ Runs security scan with Trivy
+# ✅ Checks image sizes
+# ✅ Lints Dockerfile with hadolint
+#
+# All jobs run in parallel (except test-compose which needs build-with-cpp)
+# ===========================================================================

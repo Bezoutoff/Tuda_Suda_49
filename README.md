@@ -1,10 +1,16 @@
 # Tuda Suda 49
 
+[![Docker Build](https://github.com/Bezoutoff/Tuda_Suda_49/actions/workflows/docker-build.yml/badge.svg)](https://github.com/Bezoutoff/Tuda_Suda_49/actions/workflows/docker-build.yml)
+[![Docker Publish](https://github.com/Bezoutoff/Tuda_Suda_49/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Bezoutoff/Tuda_Suda_49/actions/workflows/docker-publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 Updown 15m Auto-Order Bot для Polymarket.
 
 Автоматически ставит **10 ордеров** (5 цен × 2 стороны) при появлении новых updown 15m маркетов (BTC, ETH, SOL, XRP).
 
 ## Содержание
+
+- [Docker Deployment](#docker-deployment-) - **Рекомендуется для VPS**
 
 - [Стратегия](#стратегия)
 - [Установка](#установка)
@@ -20,6 +26,55 @@ Updown 15m Auto-Order Bot для Polymarket.
 - [Оптимизации](#оптимизации)
 - [Тестирование Latency](#тестирование-latency)
 - [Архитектура](#архитектура-как-отправляется-подписанный-ордер)
+
+## Docker Deployment 🐳
+
+**Рекомендуется для VPS** - one-click deployment с автоматическим запуском всех компонентов.
+
+### Quick Start
+
+```bash
+# 1. Clone repository
+git clone https://github.com/Bezoutoff/Tuda_Suda_49.git
+cd Tuda_Suda_49
+
+# 2. Configure environment
+cp .env.example .env
+nano .env  # Fill in: PK, CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE, FUNDER
+
+# 3. Start
+docker-compose up -d
+```
+
+**Готово!** Бот запущен. Monitoring: `docker-compose logs -f`
+
+### Что включает Docker деплой:
+
+- ✅ **Trading Bot** - PM2 с Node.js ботами (updown-btc/eth/sol/xrp, telegram-bot)
+- ✅ **Redemption Bot** - Python автовыкуп позиций каждые 60 минут
+- ✅ **Auto-restart** - Перезапуск при падении
+- ✅ **Log rotation** - Автоматическая ротация логов
+- ✅ **Health checks** - Мониторинг состояния
+
+### Commands
+
+```bash
+make up      # Start all services
+make logs    # View logs
+make down    # Stop all services
+make shell   # Enter container
+make pm2     # Show PM2 process list
+```
+
+### Подробная документация
+
+См. [README.docker.md](README.docker.md) для:
+- Detailed configuration
+- Monitoring and troubleshooting
+- Updating procedure
+- Migration from systemd
+
+---
 
 ## Стратегия
 
