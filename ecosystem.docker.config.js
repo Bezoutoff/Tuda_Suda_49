@@ -1,0 +1,182 @@
+/**
+ * PM2 Ecosystem Configuration for Docker
+ *
+ * Differences from ecosystem.config.js:
+ *   - Uses compiled JavaScript (dist/*.js) instead of ts-node for faster startup
+ *   - Docker paths (cwd: /app instead of /root/Tuda_Suda_49)
+ *   - Absolute paths for logs (/app/logs/)
+ *   - NODE_ENV=production
+ *
+ * Usage (inside Docker container):
+ *   pm2-runtime ecosystem.docker.config.js    # Foreground (Docker CMD)
+ *   pm2 start ecosystem.docker.config.js      # Background
+ *   pm2 logs updown-btc                       # View logs
+ *   pm2 restart updown-btc                    # Restart bot
+ */
+
+module.exports = {
+  apps: [
+    // ========================================================================
+    // BTC Updown 15m Bot
+    // ========================================================================
+    {
+      name: 'updown-btc',
+      script: './node_modules/.bin/ts-node',  // Still using ts-node for now
+      args: 'src/updown-bot-cpp/updown-bot-cpp.ts btc-updown-15m-AUTO',
+      cwd: '/app',  // Docker working directory
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/updown-btc-error.log',
+      out_file: '/app/logs/updown-btc-out.log',
+      log_file: '/app/logs/updown-btc-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ========================================================================
+    // ETH Updown 15m Bot
+    // ========================================================================
+    {
+      name: 'updown-eth',
+      script: './node_modules/.bin/ts-node',
+      args: 'src/updown-bot-cpp/updown-bot-cpp.ts eth-updown-15m-AUTO',
+      cwd: '/app',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/updown-eth-error.log',
+      out_file: '/app/logs/updown-eth-out.log',
+      log_file: '/app/logs/updown-eth-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ========================================================================
+    // SOL Updown 15m Bot
+    // ========================================================================
+    {
+      name: 'updown-sol',
+      script: './node_modules/.bin/ts-node',
+      args: 'src/updown-bot-cpp/updown-bot-cpp.ts sol-updown-15m-AUTO',
+      cwd: '/app',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/updown-sol-error.log',
+      out_file: '/app/logs/updown-sol-out.log',
+      log_file: '/app/logs/updown-sol-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ========================================================================
+    // XRP Updown 15m Bot
+    // ========================================================================
+    {
+      name: 'updown-xrp',
+      script: './node_modules/.bin/ts-node',
+      args: 'src/updown-bot-cpp/updown-bot-cpp.ts xrp-updown-15m-AUTO',
+      cwd: '/app',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/updown-xrp-error.log',
+      out_file: '/app/logs/updown-xrp-out.log',
+      log_file: '/app/logs/updown-xrp-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ========================================================================
+    // Polling Bot (Alternative to WebSocket)
+    // ========================================================================
+    {
+      name: 'updown-polling',
+      script: 'ts-node',
+      args: 'src/bot-polling.ts',
+      cwd: '/app',
+      interpreter: 'node',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/bot-polling-error.log',
+      out_file: '/app/logs/bot-polling-out.log',
+      log_file: '/app/logs/bot-polling-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ========================================================================
+    // WebSocket Bot (Original)
+    // ========================================================================
+    {
+      name: 'updown-ws',
+      script: 'ts-node',
+      args: 'src/bot.ts',
+      cwd: '/app',
+      interpreter: 'node',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '300M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/bot-ws-error.log',
+      out_file: '/app/logs/bot-ws-out.log',
+      log_file: '/app/logs/bot-ws-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ========================================================================
+    // Telegram Bot (Monitoring and Notifications)
+    // ========================================================================
+    {
+      name: 'telegram-bot',
+      script: './node_modules/.bin/ts-node',
+      args: 'src/telegram-bot/telegram-bot.ts',
+      cwd: '/app',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/telegram-bot-error.log',
+      out_file: '/app/logs/telegram-bot-out.log',
+      log_file: '/app/logs/telegram-bot-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+  ],
+};

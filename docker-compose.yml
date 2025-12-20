@@ -1,0 +1,118 @@
+version: '3.8'
+
+# ==============================================================================
+# Tuda Suda 49 - Docker Compose Configuration
+# ==============================================================================
+#
+# Services:
+#   - trading-bot:          PM2 with Node.js trading bots (updown-btc, telegram-bot, etc.)
+#   - redemption-scheduler: Python redemption bot running every 60 minutes
+#
+# Quick Start:
+#   1. cp .env.example .env && nano .env  (configure credentials)
+#   2. docker-compose up -d               (start all services)
+#   3. docker-compose logs -f             (view logs)
+#
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Trading Bot Service (PM2 with Node.js bots)
+  # ============================================================================
+  trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_CPP: "true"  # Set to "false" to skip C++ compilation (faster build)
+
+    container_name: tuda-suda-trading
+
+    restart: unless-stopped
+
+    # Load environment variables from .env file
+    env_file: .env
+
+    # Volume mounts
+    volumes:
+      # Logs directory (bind mount for easy access from host)
+      - ./logs:/app/logs
+
+      # .env file (read-only)
+      - ./.env:/app/.env:ro
+
+    # Network
+    networks:
+      - tuda-suda-network
+
+    # Health check (PM2 ping)
+    healthcheck:
+      test: ["CMD", "pm2", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Log rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # Redemption Scheduler Service (Python bot every 60 minutes)
+  # ============================================================================
+  redemption-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_CPP: "false"  # No C++ needed for redemption
+
+    container_name: tuda-suda-redemption
+
+    restart: unless-stopped
+
+    # Override CMD to run redemption scheduler instead of PM2
+    command: /app/docker-redemption-scheduler.sh
+
+    # Load environment variables from .env file
+    env_file: .env
+
+    # Volume mounts (shared with trading-bot)
+    volumes:
+      # Logs directory (bind mount for easy access from host)
+      - ./logs:/app/logs
+
+      # .env file (read-only)
+      - ./.env:/app/.env:ro
+
+    # Network
+    networks:
+      - tuda-suda-network
+
+    # Dependency: wait for trading-bot to be healthy before starting
+    depends_on:
+      trading-bot:
+        condition: service_healthy
+
+    # Log rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  tuda-suda-network:
+    driver: bridge
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+# Note: We use bind mounts (./logs) instead of named volumes for direct host access
+# No named volumes defined - logs/ directory persists on host filesystem
