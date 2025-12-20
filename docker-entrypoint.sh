@@ -42,7 +42,8 @@ for VAR in "${REQUIRED_VARS[@]}"; do
     VALIDATION_FAILED=1
   else
     # Don't print values for security - just show length
-    VAR_LEN=${#!VAR}
+    VAR_VALUE="${!VAR}"
+    VAR_LEN=${#VAR_VALUE}
     echo "  ✓ $VAR is set (${VAR_LEN} characters)"
   fi
 done

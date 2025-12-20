@@ -18,11 +18,12 @@
 # ==============================================================================
 ARG BUILD_CPP=true
 
-FROM ubuntu:23.04 AS cpp-builder
+FROM ubuntu:24.04 AS cpp-builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    python3-dev 
     g++ \
     make \
     libcurl4-openssl-dev \
@@ -67,7 +68,7 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 
 # Install production dependencies
-RUN npm ci --only=production && \
+RUN npm install --production && \
     npm cache clean --force
 
 # Install TypeScript compiler (build only)
@@ -94,6 +95,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-venv \
+    build-essential 
+    python3-dev 
     ca-certificates \
     curl \
     procps \
@@ -117,7 +120,7 @@ COPY --from=node-builder /build/node_modules ./node_modules
 
 # Copy C++ binaries from cpp-builder (if built)
 ARG BUILD_CPP=true
-COPY --from=cpp-builder /build/dist/ ./dist/
+COPY --from=cpp-builder /build/dist ./dist/bin/
 
 # Copy Python source code
 COPY scripts/redemption ./scripts/redemption

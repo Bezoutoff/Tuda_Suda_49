@@ -21,7 +21,7 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-btc',
-      script: './node_modules/.bin/ts-node',  // Still using ts-node for now
+      script: 'npx ts-node',  // Still using ts-node for now
       args: 'src/updown-bot-cpp/updown-bot-cpp.ts btc-updown-15m-AUTO',
       cwd: '/app',  // Docker working directory
       instances: 1,
@@ -44,7 +44,7 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-eth',
-      script: './node_modules/.bin/ts-node',
+      script: 'npx ts-node',
       args: 'src/updown-bot-cpp/updown-bot-cpp.ts eth-updown-15m-AUTO',
       cwd: '/app',
       instances: 1,
@@ -67,7 +67,7 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-sol',
-      script: './node_modules/.bin/ts-node',
+      script: 'npx ts-node',
       args: 'src/updown-bot-cpp/updown-bot-cpp.ts sol-updown-15m-AUTO',
       cwd: '/app',
       instances: 1,
@@ -90,7 +90,7 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-xrp',
-      script: './node_modules/.bin/ts-node',
+      script: 'npx ts-node',
       args: 'src/updown-bot-cpp/updown-bot-cpp.ts xrp-updown-15m-AUTO',
       cwd: '/app',
       instances: 1,
@@ -161,7 +161,7 @@ module.exports = {
     // ========================================================================
     {
       name: 'telegram-bot',
-      script: './node_modules/.bin/ts-node',
+      script: 'npx ts-node',
       args: 'src/telegram-bot/telegram-bot.ts',
       cwd: '/app',
       instances: 1,
