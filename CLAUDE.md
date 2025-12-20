@@ -786,6 +786,7 @@ RelayerApiException[status_code=401, error_message={'error': 'invalid authorizat
 
 ## История
 
+- **2025-12-18**: VPS Deployment Guide - инструкции для Ubuntu 23.04+ (venv, PEP 668, systemd configuration)
 - **2025-12-18**: Redemption Tracker - пропуск уже выкупленных позиций (redeemed_tracker.py). Экономия ~90% API запросов, 30-60 сек на запуск
 - **2025-12-15**: Redemption Bot debugging - исправлены API парсинг, SDK интеграция, calldata формирование. Осталась проблема 401 авторизации с relayer.
 - **2025-12-14**: Redemption Bot - автоматический выкуп позиций (Python, systemd timer, Telegram уведомления)
