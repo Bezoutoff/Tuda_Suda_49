@@ -499,20 +499,39 @@ Processing 8 redemptions...
 
 ### Установка
 
+**Ubuntu 23.04+ требует virtual environment (PEP 668):**
+
 ```bash
 # 1. Установить Python зависимости
-pip3 install -r scripts/requirements.txt
+
+# Вариант A: Virtual Environment (рекомендуется)
+python3 -m venv venv
+source venv/bin/activate
+pip install -r scripts/requirements.txt
+
+# Вариант B: System-wide (быстрее, но не рекомендуется)
+pip3 install -r scripts/requirements.txt --break-system-packages
 
 # 2. Тест (manual run)
 python3 scripts/redemption/main.py
 
-# 3. Установить systemd timer (Linux VPS)
+# 3. Настроить .env файл
+cp .env.example .env
+nano .env
+# Заполнить: PK, FUNDER, BUILDER_API_KEY, BUILDER_SECRET, BUILDER_PASSPHRASE
+
+# 4. Если используете venv - отредактировать systemd service
+nano systemd/redemption-bot.service
+# Изменить ExecStart на полный путь к venv/bin/python3:
+# ExecStart=/root/Tuda_Suda_49/venv/bin/python3 /root/Tuda_Suda_49/scripts/redemption/main.py
+
+# 5. Установить systemd timer (Linux VPS)
 sudo cp systemd/redemption-bot.* /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable redemption-bot.timer
 sudo systemctl start redemption-bot.timer
 
-# 4. Проверить статус
+# 6. Проверить статус
 sudo systemctl status redemption-bot.timer
 sudo journalctl -u redemption-bot.service -f
 ```

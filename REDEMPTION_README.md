@@ -14,18 +14,42 @@ Systemd Timer (60 min) → Python Script → Check API → Redeem via Relayer �
 
 ### 1. Установить Python зависимости
 
+**Ubuntu 23.04+ требует virtual environment (PEP 668):**
+
 ```bash
 cd /root/Tuda_Suda_49
-pip3 install -r scripts/requirements.txt
+
+# Вариант A: Virtual Environment (рекомендуется)
+python3 -m venv venv
+source venv/bin/activate
+pip install -r scripts/requirements.txt
+
+# Вариант B: System-wide
+pip3 install -r scripts/requirements.txt --break-system-packages
 ```
 
-### 2. Проверить .env
+### 2. Настроить .env
 
-Убедитесь что в `.env` файле заданы:
-- `PK` - приватный ключ кошелька
-- `FUNDER` - funder address
-- `CLOB_API_KEY`, `CLOB_SECRET`, `CLOB_PASS_PHRASE` - API credentials
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_ID` - для уведомлений (опционально)
+```bash
+cp .env.example .env
+nano .env
+```
+
+Заполните credentials:
+```env
+# Wallet
+PK=your_private_key_without_0x
+FUNDER=0xYourFunderAddress
+
+# Builder Relayer (используйте ТЕ ЖЕ credentials что и для CLOB)
+BUILDER_API_KEY=your_clob_api_key
+BUILDER_SECRET=your_clob_secret
+BUILDER_PASSPHRASE=your_clob_passphrase
+
+# Telegram (опционально)
+TELEGRAM_BOT_TOKEN=your_token
+TELEGRAM_ADMIN_ID=your_chat_id
+```
 
 ### 3. Тестирование (manual run)
 
@@ -38,7 +62,19 @@ cat logs/redemption.csv
 cat logs/redemption-bot.log
 ```
 
-### 4. Установить systemd timer
+### 4. Настроить systemd service (если используете venv)
+
+```bash
+# Отредактировать service файл
+nano systemd/redemption-bot.service
+
+# Изменить ExecStart на полный путь к venv python:
+# ExecStart=/root/Tuda_Suda_49/venv/bin/python3 /root/Tuda_Suda_49/scripts/redemption/main.py
+
+# Сохранить: Ctrl+O, Enter, Ctrl+X
+```
+
+### 5. Установить systemd timer
 
 ```bash
 # Copy service files
