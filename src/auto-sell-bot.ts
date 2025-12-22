@@ -29,14 +29,14 @@ let tradingService: TradingService;
 
 /**
  * Handle trade event from User Channel
+ * NOTE: Receives payload object, not the full message
  */
-async function handleTradeEvent(message: any) {
+async function handleTradeEvent(payload: any) {
   try {
-    const data = typeof message === 'string' ? JSON.parse(message) : message;
-
-    // Extract basic info
-    const tradeId = data.id || '';
-    const side = data.side || '';
+    // Extract basic info from payload
+    const tradeId = payload.id || '';
+    const side = payload.side || '';
+    const owner = payload.owner || '';
 
     // Skip duplicates first
     if (processedTrades.has(tradeId)) {
@@ -50,8 +50,8 @@ async function handleTradeEvent(message: any) {
     }
 
     // Check if user is TAKER or MAKER
-    const isTaker = data.owner === tradingConfig.apiKey;
-    const isMaker = data.maker_orders?.some((order: any) =>
+    const isTaker = owner === tradingConfig.apiKey;
+    const isMaker = payload.maker_orders?.some((order: any) =>
       order.owner === tradingConfig.apiKey
     );
 
@@ -65,13 +65,13 @@ async function handleTradeEvent(message: any) {
     let size: string;
 
     if (isTaker) {
-      // Taker scenario: data at top level
-      tokenId = data.asset_id;
-      size = data.size;
+      // Taker scenario: payload has asset_id and size
+      tokenId = payload.asset_id;
+      size = payload.size;
       log(`[TAKER] BUY position opened: ${size} shares of ${tokenId}`);
     } else {
       // Maker scenario: data in maker_orders array
-      const ourOrder = data.maker_orders.find((order: any) =>
+      const ourOrder = payload.maker_orders.find((order: any) =>
         order.owner === tradingConfig.apiKey
       );
       tokenId = ourOrder?.asset_id;
@@ -86,6 +86,11 @@ async function handleTradeEvent(message: any) {
 
     // Mark as processed BEFORE selling (prevent double-sell on error)
     processedTrades.add(tradeId);
+
+    // Wait for blockchain confirmation (tokens need to settle)
+    const DELAY_MS = 15000; // 15 seconds
+    log(`[TRIGGER] Waiting ${DELAY_MS / 1000}s for blockchain confirmation...`);
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
     // Trigger auto-sell
     log(`[TRIGGER] Auto-selling ${size} shares of ${tokenId} (trade: ${tradeId})`);
@@ -138,28 +143,22 @@ async function sellPosition(tokenId: string, size: number) {
 
 /**
  * Handle incoming WebSocket messages
+ * NOTE: RealTimeDataClient passes TWO parameters: (client, message)
  */
-function handleMessage(message: any) {
+function handleMessage(client: any, message: any) {
   try {
     const data = typeof message === 'string' ? JSON.parse(message) : message;
 
     const topic = data.topic || '';
+    const msgType = data.type || '';
 
-    // DEBUG: Log ALL incoming messages (not just clob_user)
-    log(`[DEBUG] Received WebSocket message - topic: "${topic}"`);
+    // DEBUG: Log incoming messages
+    log(`[DEBUG] Message - topic: "${topic}", type: "${msgType}"`);
 
-    // DEBUG: Log ALL user channel events with full details
-    if (topic === 'clob_user') {
-      const eventType = data.event_type || 'unknown';
-      const ownerPreview = data.owner ? data.owner.substring(0, 12) + '...' : 'none';
-      const side = data.side || 'unknown';
-      log(`[DEBUG] User event: type=${eventType}, side=${side}, owner=${ownerPreview}`);
-      log(`[DEBUG] Full event:`, JSON.stringify(data, null, 2));
-    }
-
-    // Handle trade events using event_type field (NOT data.type!)
-    if (topic === 'clob_user' && data.event_type === 'trade') {
-      handleTradeEvent(data);
+    // Handle trade events - data is in payload!
+    if (topic === 'clob_user' && msgType === 'trade') {
+      // Pass payload (not the whole data object)
+      handleTradeEvent(data.payload);
     }
 
   } catch (error: any) {
