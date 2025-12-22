@@ -119,6 +119,12 @@ function handleMessage(client: any, message: any) {
     const topic = data.topic || '';
     const msgType = data.type || '';
 
+    // DEBUG: Log ALL incoming messages
+    log(`[DEBUG] Received message - topic: ${topic}, type: ${msgType}`);
+    if (topic === 'clob_user') {
+      log(`[DEBUG] User channel message:`, JSON.stringify(data, null, 2));
+    }
+
     // Handle trade events (position opened)
     if (topic === 'clob_user' && msgType === 'trade') {
       handleTradeEvent(data);
