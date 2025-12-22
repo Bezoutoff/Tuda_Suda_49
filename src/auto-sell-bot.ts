@@ -2,13 +2,13 @@
  * Auto-Sell Bot - мгновенная продажа позиций через market orders
  */
 
+// IMPORTANT: Load .env BEFORE importing config
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { RealTimeDataClient } from '@polymarket/real-time-data-client';
 import { TradingService } from './trading-service';
 import { tradingConfig, AUTO_SELL_CONFIG } from './config';
-import * as dotenv from 'dotenv';
-
-// Load .env
-dotenv.config();
 
 // Logging helpers
 function log(message: string, ...args: any[]) {
@@ -219,12 +219,6 @@ async function main() {
 
       log('Subscribed to User Channel (trade events)');
       log('Waiting for new positions to sell...');
-    },
-    onError: (error: any) => {
-      logError('WebSocket error:', error);
-    },
-    onDisconnect: () => {
-      log('Disconnected from Polymarket RTDS - will auto-reconnect');
     },
   });
 
