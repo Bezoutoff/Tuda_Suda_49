@@ -145,11 +145,16 @@ function handleMessage(message: any) {
 
     const topic = data.topic || '';
 
-    // DEBUG: Log ALL user channel events
+    // DEBUG: Log ALL incoming messages (not just clob_user)
+    log(`[DEBUG] Received WebSocket message - topic: "${topic}"`);
+
+    // DEBUG: Log ALL user channel events with full details
     if (topic === 'clob_user') {
       const eventType = data.event_type || 'unknown';
-      const ownerPreview = data.owner ? data.owner.substring(0, 8) + '...' : 'none';
-      log(`[DEBUG] Event type: ${eventType}, owner: ${ownerPreview}`);
+      const ownerPreview = data.owner ? data.owner.substring(0, 12) + '...' : 'none';
+      const side = data.side || 'unknown';
+      log(`[DEBUG] User event: type=${eventType}, side=${side}, owner=${ownerPreview}`);
+      log(`[DEBUG] Full event:`, JSON.stringify(data, null, 2));
     }
 
     // Handle trade events using event_type field (NOT data.type!)
@@ -179,6 +184,10 @@ async function main() {
     process.exit(1);
   }
 
+  // Log API KEY for verification
+  log(`Using API KEY: ${tradingConfig.apiKey?.substring(0, 12)}...`);
+  log(`Using FUNDER: ${tradingConfig.funder}`);
+
   // Initialize trading service
   log('Initializing trading service...');
   tradingService = new TradingService(tradingConfig);
@@ -197,6 +206,7 @@ async function main() {
       log('Connected to Polymarket RTDS');
 
       // Subscribe to User Channel (all events)
+      log(`[DEBUG] Subscribing with API KEY: ${clobAuth.key?.substring(0, 12)}...`);
       client.subscribe({
         subscriptions: [
           {
@@ -209,6 +219,12 @@ async function main() {
 
       log('Subscribed to User Channel (trade events)');
       log('Waiting for new positions to sell...');
+    },
+    onError: (error: any) => {
+      logError('WebSocket error:', error);
+    },
+    onDisconnect: () => {
+      log('Disconnected from Polymarket RTDS - will auto-reconnect');
     },
   });
 
