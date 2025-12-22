@@ -1,6 +1,6 @@
 # Tuda Suda 49 - Docker Deployment Guide
 
-**One-Click Deployment** для Polymarket Trading Bot с Docker и docker-compose.
+**One-Click Deployment** для Polymarket Trading Bot с Docker и docker compose.
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ cp .env.example .env
 nano .env  # Fill in: PK, CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE, FUNDER
 
 # 3. Start
-docker-compose up -d
+docker compose up -d
 ```
 
 **Готово!** Бот запущен и работает.
@@ -58,7 +58,7 @@ docker-compose up -d
 
 ```bash
 docker --version        # Should show 20.10+
-docker-compose --version  # Should show 2.0+
+docker compose --version  # Should show 2.0+
 ```
 
 ---
@@ -108,7 +108,7 @@ TELEGRAM_ADMIN_ID=123456789
 ### 3. Build and Start
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Первый build займет 5-10 минут (компиляция TypeScript и C++).
@@ -117,10 +117,10 @@ docker-compose up -d
 
 ```bash
 # Check containers are running
-docker-compose ps
+docker compose ps
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
 You should see:
@@ -146,7 +146,7 @@ You should see:
 
 ### Build Arguments
 
-Modify `docker-compose.yml` to customize build:
+Modify `docker compose.yml` to customize build:
 
 ```yaml
 services:
@@ -168,26 +168,26 @@ services:
 
 ```bash
 # Build images and start containers
-docker-compose up -d
+docker compose up -d
 
 # View build logs (if needed)
-docker-compose build --progress=plain
+docker compose build --progress=plain
 ```
 
 ### Rebuild After Code Changes
 
 ```bash
 # Rebuild and restart
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### Start Without Building
 
 ```bash
 # Start existing containers
-docker-compose start
+docker compose start
 ```
 
 ---
@@ -198,16 +198,16 @@ docker-compose start
 
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Trading bot only
-docker-compose logs -f trading-bot
+docker compose logs -f trading-bot
 
 # Redemption scheduler only
-docker-compose logs -f redemption-scheduler
+docker compose logs -f redemption-scheduler
 
 # Last 100 lines
-docker-compose logs --tail=100
+docker compose logs --tail=100
 ```
 
 ### PM2 Process Monitor (Inside Container)
@@ -230,7 +230,7 @@ docker exec tuda-suda-trading pm2 describe updown-btc
 
 ```bash
 # Check health status
-docker-compose ps
+docker compose ps
 
 # Detailed container info
 docker inspect tuda-suda-trading
@@ -265,23 +265,23 @@ ls -lh logs/
 git pull origin main
 
 # 2. Rebuild containers
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 
 # 3. Verify
-docker-compose ps
-docker-compose logs -f
+docker compose ps
+docker compose logs -f
 ```
 
 ### Update Docker Images (Base OS/Node.js/Python)
 
 ```bash
 # Pull latest base images
-docker-compose build --no-cache --pull
+docker compose build --no-cache --pull
 
 # Restart
-docker-compose down && docker-compose up -d
+docker compose down && docker compose up -d
 ```
 
 ---
@@ -292,26 +292,26 @@ docker-compose down && docker-compose up -d
 
 ```bash
 # Stop containers (logs preserved)
-docker-compose stop
+docker compose stop
 
 # Stop and remove containers (logs still preserved in ./logs/)
-docker-compose down
+docker compose down
 ```
 
 ### Start All Services
 
 ```bash
-docker-compose start
+docker compose start
 ```
 
 ### Restart Specific Service
 
 ```bash
 # Restart trading bot
-docker-compose restart trading-bot
+docker compose restart trading-bot
 
 # Restart redemption scheduler
-docker-compose restart redemption-scheduler
+docker compose restart redemption-scheduler
 ```
 
 ### Restart Individual Bot (PM2)
@@ -328,7 +328,7 @@ docker exec tuda-suda-trading pm2 restart all
 
 ```bash
 # Remove containers and images (CAREFUL: will delete everything!)
-docker-compose down
+docker compose down
 docker rmi tuda_suda_49-trading-bot tuda_suda_49-redemption-scheduler
 
 # Logs are preserved in ./logs/ unless manually deleted
@@ -342,7 +342,7 @@ docker rmi tuda_suda_49-trading-bot tuda_suda_49-redemption-scheduler
 
 **Check logs:**
 ```bash
-docker-compose logs trading-bot
+docker compose logs trading-bot
 ```
 
 **Common issues:**
@@ -355,7 +355,7 @@ docker-compose logs trading-bot
 
 2. **Port conflicts**
    - Docker doesn't expose ports (no HTTP), so this shouldn't happen
-   - If using custom configuration, check `docker-compose ps`
+   - If using custom configuration, check `docker compose ps`
 
 3. **Insufficient memory**
    ```bash
@@ -381,7 +381,7 @@ pm2 logs updown-btc
 
 **Check scheduler logs:**
 ```bash
-docker-compose logs redemption-scheduler
+docker compose logs redemption-scheduler
 ```
 
 **Verify Python dependencies:**
@@ -398,7 +398,7 @@ docker exec tuda-suda-redemption /opt/venv/bin/python3 /app/scripts/redemption/m
 
 **Clear Docker cache:**
 ```bash
-docker-compose build --no-cache --pull
+docker compose build --no-cache --pull
 ```
 
 **Check disk space:**
@@ -467,7 +467,7 @@ git pull origin main
 ### 4. Start Docker
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 5. Verify Migration
@@ -480,7 +480,7 @@ ls -lh logs/
 tail -20 logs/redemption.csv
 
 # Check Docker logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### 6. Remove Old Services (Optional)
@@ -500,7 +500,7 @@ pm2 delete all
 
 ```bash
 # Stop Docker
-docker-compose down
+docker compose down
 
 # Restore PM2
 pm2 resurrect
@@ -597,8 +597,8 @@ module.exports = {
 
 After editing, rebuild:
 ```bash
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### Change Redemption Schedule
@@ -615,8 +615,8 @@ RANDOM_DELAY=$((RANDOM % 120))  # 0-120 seconds
 
 After editing, rebuild:
 ```bash
-docker-compose build --no-cache
-docker-compose restart redemption-scheduler
+docker compose build --no-cache
+docker compose restart redemption-scheduler
 ```
 
 ### Skip C++ Compilation
@@ -624,7 +624,7 @@ docker-compose restart redemption-scheduler
 Faster builds without C++ components:
 
 ```yaml
-# docker-compose.yml
+# docker compose.yml
 services:
   trading-bot:
     build:
@@ -634,8 +634,8 @@ services:
 
 Rebuild:
 ```bash
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### Custom Docker Network
@@ -643,7 +643,7 @@ docker-compose up -d
 If you need containers to communicate with other services:
 
 ```yaml
-# docker-compose.yml
+# docker compose.yml
 networks:
   tuda-suda-network:
     external: true  # Use existing network
@@ -653,7 +653,7 @@ networks:
 ### Health Check Customization
 
 ```yaml
-# docker-compose.yml
+# docker compose.yml
 services:
   trading-bot:
     healthcheck:
@@ -671,7 +671,7 @@ services:
 
 1. **Check logs first:**
    ```bash
-   docker-compose logs -f
+   docker compose logs -f
    ```
 
 2. **Search GitHub Issues:**
@@ -680,30 +680,30 @@ services:
 3. **Create new issue:**
    Include:
    - Docker version (`docker --version`)
-   - Error logs (`docker-compose logs`)
+   - Error logs (`docker compose logs`)
    - Steps to reproduce
 
 ### Useful Commands Reference
 
 ```bash
 # Build
-docker-compose build              # Build images
-docker-compose build --no-cache   # Build from scratch
+docker compose build              # Build images
+docker compose build --no-cache   # Build from scratch
 
 # Run
-docker-compose up -d              # Start in background
-docker-compose up                 # Start with logs
+docker compose up -d              # Start in background
+docker compose up                 # Start with logs
 
 # Stop
-docker-compose stop               # Stop containers
-docker-compose down               # Stop and remove
+docker compose stop               # Stop containers
+docker compose down               # Stop and remove
 
 # Logs
-docker-compose logs -f            # Follow logs
-docker-compose logs --tail=100    # Last 100 lines
+docker compose logs -f            # Follow logs
+docker compose logs --tail=100    # Last 100 lines
 
 # Status
-docker-compose ps                 # Container status
+docker compose ps                 # Container status
 docker stats                      # Resource usage
 
 # Shell
@@ -717,7 +717,7 @@ docker exec tuda-suda-trading pm2 restart all  # Restart all bots
 
 # Cleanup
 docker system prune -a            # Remove unused data
-docker-compose down --volumes     # Remove containers + volumes
+docker compose down --volumes     # Remove containers + volumes
 ```
 
 ---
