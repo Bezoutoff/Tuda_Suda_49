@@ -1,0 +1,11 @@
+services:
+  trading-bot:
+    entrypoint: /bin/bash
+    command: -c "tail -f /dev/null"
+    healthcheck:
+      test: ["CMD", "echo", "ok"]
+      interval: 10s
+
+  redemption-scheduler:
+    entrypoint: /bin/bash
+    command: -c "tail -f /dev/null"
