@@ -34,35 +34,62 @@ async function handleTradeEvent(message: any) {
   try {
     const data = typeof message === 'string' ? JSON.parse(message) : message;
 
-    // Extract trade info
+    // Extract basic info
     const tradeId = data.id || '';
-    const assetId = data.asset_id || '';
     const side = data.side || '';
-    const size = data.size || '0';
-    const makerAddress = data.maker_address || data.owner || '';
 
-    // Skip if not a BUY trade (position opening)
+    // Skip duplicates first
+    if (processedTrades.has(tradeId)) {
+      log(`[SKIP] Trade ${tradeId} already processed`);
+      return;
+    }
+
+    // Only BUY trades (position opening)
     if (side !== 'BUY') {
       return;
     }
 
-    // Skip if not our funder address
-    const funderAddress = tradingConfig.funder?.toLowerCase();
-    if (makerAddress.toLowerCase() !== funderAddress) {
+    // Check if user is TAKER or MAKER
+    const isTaker = data.owner === tradingConfig.apiKey;
+    const isMaker = data.maker_orders?.some((order: any) =>
+      order.owner === tradingConfig.apiKey
+    );
+
+    if (!isTaker && !isMaker) {
+      // Not our trade, skip silently
       return;
     }
 
-    // Skip duplicates
-    if (processedTrades.has(tradeId)) {
+    // Extract token ID and size based on role
+    let tokenId: string;
+    let size: string;
+
+    if (isTaker) {
+      // Taker scenario: data at top level
+      tokenId = data.asset_id;
+      size = data.size;
+      log(`[TAKER] BUY position opened: ${size} shares of ${tokenId}`);
+    } else {
+      // Maker scenario: data in maker_orders array
+      const ourOrder = data.maker_orders.find((order: any) =>
+        order.owner === tradingConfig.apiKey
+      );
+      tokenId = ourOrder?.asset_id;
+      size = ourOrder?.matched_amount;
+      log(`[MAKER] BUY position filled: ${size} shares of ${tokenId}`);
+    }
+
+    if (!tokenId || !size) {
+      logError(`Missing tokenId or size in trade ${tradeId}`);
       return;
     }
 
+    // Mark as processed BEFORE selling (prevent double-sell on error)
     processedTrades.add(tradeId);
 
-    log(`New position detected: tokenId=${assetId}, size=${size}`);
-
-    // Sell position immediately
-    await sellPosition(assetId, parseFloat(size));
+    // Trigger auto-sell
+    log(`[TRIGGER] Auto-selling ${size} shares of ${tokenId} (trade: ${tradeId})`);
+    await sellPosition(tokenId, parseFloat(size));
 
   } catch (error: any) {
     logError('Error handling trade event:', error.message);
@@ -112,21 +139,21 @@ async function sellPosition(tokenId: string, size: number) {
 /**
  * Handle incoming WebSocket messages
  */
-function handleMessage(client: any, message: any) {
+function handleMessage(message: any) {
   try {
     const data = typeof message === 'string' ? JSON.parse(message) : message;
 
     const topic = data.topic || '';
-    const msgType = data.type || '';
 
-    // DEBUG: Log ALL incoming messages
-    log(`[DEBUG] Received message - topic: ${topic}, type: ${msgType}`);
+    // DEBUG: Log ALL user channel events
     if (topic === 'clob_user') {
-      log(`[DEBUG] User channel message:`, JSON.stringify(data, null, 2));
+      const eventType = data.event_type || 'unknown';
+      const ownerPreview = data.owner ? data.owner.substring(0, 8) + '...' : 'none';
+      log(`[DEBUG] Event type: ${eventType}, owner: ${ownerPreview}`);
     }
 
-    // Handle trade events (position opened)
-    if (topic === 'clob_user' && msgType === 'trade') {
+    // Handle trade events using event_type field (NOT data.type!)
+    if (topic === 'clob_user' && data.event_type === 'trade') {
       handleTradeEvent(data);
     }
 
