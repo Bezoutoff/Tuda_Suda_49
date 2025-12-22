@@ -21,8 +21,9 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-btc',
-      script: 'npx ts-node',  // Still using ts-node for now
-      args: 'src/updown-bot-cpp/updown-bot-cpp.ts btc-updown-15m-AUTO',
+      script: 'src/updown-bot-cpp/updown-bot-cpp.ts',
+      interpreter: './node_modules/.bin/ts-node',
+      args: 'btc-updown-15m-AUTO',
       cwd: '/app',  // Docker working directory
       instances: 1,
       autorestart: true,
@@ -44,8 +45,9 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-eth',
-      script: 'npx ts-node',
-      args: 'src/updown-bot-cpp/updown-bot-cpp.ts eth-updown-15m-AUTO',
+      script: 'src/updown-bot-cpp/updown-bot-cpp.ts',
+      interpreter: './node_modules/.bin/ts-node',
+      args: 'eth-updown-15m-AUTO',
       cwd: '/app',
       instances: 1,
       autorestart: true,
@@ -67,8 +69,9 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-sol',
-      script: 'npx ts-node',
-      args: 'src/updown-bot-cpp/updown-bot-cpp.ts sol-updown-15m-AUTO',
+      script: 'src/updown-bot-cpp/updown-bot-cpp.ts',
+      interpreter: './node_modules/.bin/ts-node',
+      args: 'sol-updown-15m-AUTO',
       cwd: '/app',
       instances: 1,
       autorestart: true,
@@ -90,8 +93,9 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-xrp',
-      script: 'npx ts-node',
-      args: 'src/updown-bot-cpp/updown-bot-cpp.ts xrp-updown-15m-AUTO',
+      script: 'src/updown-bot-cpp/updown-bot-cpp.ts',
+      interpreter: './node_modules/.bin/ts-node',
+      args: 'xrp-updown-15m-AUTO',
       cwd: '/app',
       instances: 1,
       autorestart: true,
@@ -113,10 +117,9 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-polling',
-      script: 'ts-node',
-      args: 'src/bot-polling.ts',
+      script: 'src/bot-polling.ts',
+      interpreter: './node_modules/.bin/ts-node',
       cwd: '/app',
-      interpreter: 'node',
       instances: 1,
       autorestart: true,
       watch: false,
@@ -137,10 +140,9 @@ module.exports = {
     // ========================================================================
     {
       name: 'updown-ws',
-      script: 'ts-node',
-      args: 'src/bot.ts',
+      script: 'src/bot.ts',
+      interpreter: './node_modules/.bin/ts-node',
       cwd: '/app',
-      interpreter: 'node',
       instances: 1,
       autorestart: true,
       watch: false,
@@ -161,8 +163,8 @@ module.exports = {
     // ========================================================================
     {
       name: 'telegram-bot',
-      script: 'npx ts-node',
-      args: 'src/telegram-bot/telegram-bot.ts',
+      script: 'src/telegram-bot/telegram-bot.ts',
+      interpreter: './node_modules/.bin/ts-node',
       cwd: '/app',
       instances: 1,
       autorestart: true,
@@ -184,8 +186,8 @@ module.exports = {
     // ========================================================================
     {
       name: 'auto-sell-bot',
-      script: 'npx ts-node',
-      args: 'src/auto-sell-bot.ts',
+      script: 'src/auto-sell-bot.ts',
+      interpreter: './node_modules/.bin/ts-node',
       cwd: '/app',
       instances: 1,
       autorestart: true,
