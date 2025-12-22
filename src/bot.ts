@@ -16,6 +16,7 @@ import {
   BOT_CONFIG,
   tradingConfig,
   validateTradingConfig,
+  validateOrderConfig,
   getOrderSize,
   extractStartTimestamp,
   isUpdownMarket,
@@ -74,11 +75,11 @@ async function placeAutoOrders(
     return;
   }
 
-  const size = getOrderSize();
   const orderConfig = BOT_CONFIG.ORDER_CONFIG;
 
-  // Check if market is still valid (use earliest expiration)
-  const earliestExpiration = startTimestamp - Math.max(...orderConfig.map(c => c.expirationBuffer));
+  // Check if market is still valid (use earliest expiration across both sides)
+  const allExpirationBuffers = orderConfig.flatMap(c => [c.up.expirationBuffer, c.down.expirationBuffer]);
+  const earliestExpiration = startTimestamp - Math.max(...allExpirationBuffers);
   const nowSeconds = Math.floor(Date.now() / 1000);
   if (earliestExpiration <= nowSeconds) {
     log(`Market ${slug} has already started or expiration passed. Skipping.`);
@@ -89,39 +90,45 @@ async function placeAutoOrders(
 
   log(`Placing orders for ${slug}:`);
   log(`  Start time: ${startDate.toLocaleString('ru-RU')}`);
-  log(`  Size: ${size} | Config: ${orderConfig.map(c => `${c.price}(${c.expirationBuffer}s)`).join(', ')}`);
+  log(`  Config: ${orderConfig.map(c =>
+    `${c.price}(UP:${c.up.size}@${c.up.expirationBuffer}s, DOWN:${c.down.size}@${c.down.expirationBuffer}s)`
+  ).join(', ')}`);
   log(`  Total: ${orderConfig.length * 2} orders (${orderConfig.length} UP + ${orderConfig.length} DOWN)`);
 
   try {
     let placedCount = 0;
     const totalOrders = orderConfig.length * 2;
 
-    for (const { price, expirationBuffer } of orderConfig) {
-      const expirationTimestamp = startTimestamp - expirationBuffer;
+    for (const config of orderConfig) {
+      const { price, up, down } = config;
+
+      // Calculate separate expiration for UP and DOWN
+      const upExpirationTimestamp = startTimestamp - up.expirationBuffer;
+      const downExpirationTimestamp = startTimestamp - down.expirationBuffer;
 
       // Place UP (YES) order
-      log(`Placing UP @ ${price} (expires ${new Date(expirationTimestamp * 1000).toLocaleString('ru-RU')})...`);
+      log(`Placing UP @ ${price} (size: ${up.size}, expires ${new Date(upExpirationTimestamp * 1000).toLocaleString('ru-RU')})...`);
       const yesOrder = await tradingService.createLimitOrder({
         tokenId: yesTokenId,
         side: 'BUY',
         price: price,
-        size: size,
+        size: up.size,
         outcome: 'YES',
-        expirationTimestamp: expirationTimestamp,
+        expirationTimestamp: upExpirationTimestamp,
         negRisk: true,
       });
       placedCount++;
       log(`UP @ ${price} placed: ${yesOrder.orderId} (${placedCount}/${totalOrders})`);
 
       // Place DOWN (NO) order
-      log(`Placing DOWN @ ${price} (expires ${new Date(expirationTimestamp * 1000).toLocaleString('ru-RU')})...`);
+      log(`Placing DOWN @ ${price} (size: ${down.size}, expires ${new Date(downExpirationTimestamp * 1000).toLocaleString('ru-RU')})...`);
       const noOrder = await tradingService.createLimitOrder({
         tokenId: noTokenId,
         side: 'BUY',
         price: price,
-        size: size,
+        size: down.size,
         outcome: 'NO',
-        expirationTimestamp: expirationTimestamp,
+        expirationTimestamp: downExpirationTimestamp,
         negRisk: true,
       });
       placedCount++;
@@ -345,10 +352,19 @@ function handleMessage(client: any, message: any) {
  */
 async function main() {
   log('Starting Updown Auto-Order Bot...');
-  log(`Order size: ${getOrderSize()} USDC`);
-  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c => `${c.price}(${c.expirationBuffer}s)`).join(', ')}`);
+  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c =>
+    `${c.price}(UP:${c.up.size}@${c.up.expirationBuffer}s, DOWN:${c.down.size}@${c.down.expirationBuffer}s)`
+  ).join(', ')}`);
   log(`Total: ${BOT_CONFIG.ORDER_CONFIG.length * 2} orders per market`);
   log(`Market patterns: ${BOT_CONFIG.MARKET_PATTERNS.join(', ')}`);
+
+  // Validate order configuration
+  const configErrors = validateOrderConfig();
+  if (configErrors.length > 0) {
+    logError('Invalid ORDER_CONFIG:');
+    configErrors.forEach(err => logError(`  - ${err}`));
+    process.exit(1);
+  }
 
   // Initialize trading service
   const tradingOk = initTradingService();

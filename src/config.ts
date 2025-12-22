@@ -2,7 +2,7 @@
  * Bot and Trading Configuration
  */
 
-import { TradingConfig } from './types';
+import { TradingConfig, OrderConfig } from './types';
 
 // Bot configuration
 export const BOT_CONFIG = {
@@ -14,24 +14,70 @@ export const BOT_CONFIG = {
     'xrp-updown-15m',
   ],
 
-  // Order config: price + size + expiration buffer (seconds before market start)
+  // Order config: price with separate UP/DOWN size and expiration
   // NOTE: Polymarket adds +60 sec to expiration, so we subtract 60 from desired value
   ORDER_CONFIG: [
- //   { price: 0.46, size: 10,  expirationBuffer: 60 },   // 2 мин до старта (120-60)
- //   { price: 0.45, size: 15, expirationBuffer: -30 },  // 30 сек до старта (30-60)
-    { price: 0.44, size: 10, expirationBuffer: -57 },  // 2 сек до старта (1-60)
-    { price: 0.43, size: 20, expirationBuffer: -57 },  // 2 сек до старта (1-60)
-    { price: 0.42, size: 25, expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.41, size: 30,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.40, size: 35,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.39, size: 40,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.38, size: 45,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.37, size: 50,  expirationBuffer: -58 },  // 2 сек до старта (1-60)
-    { price: 0.35, size: 70,  expirationBuffer: -59 },  // 2 сек до старта (1-60)
-    { price: 0.31, size: 100,  expirationBuffer: -59 },  // 2 сек до старта (1-60)
-    { price: 0.21, size: 200,  expirationBuffer: -59 },  // 2 сек до старта (1-60)
-    { price: 0.11, size: 400,  expirationBuffer: -59 },  // 1 сек до старта (1-60)
-  ],
+    {
+      price: 0.44,
+      up: { size: 20, expirationBuffer: -30 },
+      down: { size: 10, expirationBuffer: -1 }
+    },
+    {
+      price: 0.43,
+      up: { size: 40, expirationBuffer: -57 },
+      down: { size: 20, expirationBuffer: -30 }
+    },
+    {
+      price: 0.42,
+      up: { size: 50, expirationBuffer: -57 },
+      down: { size: 50, expirationBuffer: -30 }
+    },
+    {
+      price: 0.41,
+      up: { size: 60, expirationBuffer: -57 },
+      down: { size: 60, expirationBuffer: -30 }
+    },
+    {
+      price: 0.40,
+      up: { size: 70, expirationBuffer: -57 },
+      down: { size: 70, expirationBuffer: -57 }
+    },
+    {
+      price: 0.39,
+      up: { size: 80, expirationBuffer: -57 },
+      down: { size: 80, expirationBuffer: -57 }
+    },
+    {
+      price: 0.38,
+      up: { size: 90, expirationBuffer: -57 },
+      down: { size: 90, expirationBuffer: -57 }
+    },
+    {
+      price: 0.36,
+      up: { size: 100, expirationBuffer: -57 },
+      down: { size: 100, expirationBuffer: -57 }
+    },
+    {
+      price: 0.34,
+      up: { size: 140, expirationBuffer: -58 },
+      down: { size: 140, expirationBuffer: -57 }
+    },
+    {
+      price: 0.32,
+      up: { size: 200, expirationBuffer: -58 },
+      down: { size: 200, expirationBuffer: -57 }
+    },
+    {
+      price: 0.21,
+      up: { size: 400, expirationBuffer: -58 },
+      down: { size: 400, expirationBuffer: -58 }
+    },
+    {
+      price: 0.16,
+      up: { size: 800, expirationBuffer: -58 },
+      down: { size: 800, expirationBuffer: -58 }
+    },
+  ] as OrderConfig[],
 
   // Default order size (can be overridden by BOT_ORDER_SIZE env var)
   DEFAULT_ORDER_SIZE: 5,
@@ -160,3 +206,40 @@ export function getMatchedPattern(slug: string): string | null {
 
 // Backward compatibility alias
 export const isBtcUpdownMarket = isUpdownMarket;
+
+/**
+ * Validate ORDER_CONFIG structure
+ */
+export function validateOrderConfig(): string[] {
+  const errors: string[] = [];
+
+  BOT_CONFIG.ORDER_CONFIG.forEach((config, index) => {
+    if (typeof config.price !== 'number' || config.price <= 0 || config.price >= 1) {
+      errors.push(`Config [${index}]: price must be between 0 and 1`);
+    }
+
+    if (!config.up) {
+      errors.push(`Config [${index}]: missing 'up' configuration`);
+    } else {
+      if (typeof config.up.size !== 'number' || config.up.size <= 0) {
+        errors.push(`Config [${index}].up: size must be positive`);
+      }
+      if (typeof config.up.expirationBuffer !== 'number') {
+        errors.push(`Config [${index}].up: expirationBuffer must be a number`);
+      }
+    }
+
+    if (!config.down) {
+      errors.push(`Config [${index}]: missing 'down' configuration`);
+    } else {
+      if (typeof config.down.size !== 'number' || config.down.size <= 0) {
+        errors.push(`Config [${index}].down: size must be positive`);
+      }
+      if (typeof config.down.expirationBuffer !== 'number') {
+        errors.push(`Config [${index}].down: expirationBuffer must be a number`);
+      }
+    }
+  });
+
+  return errors;
+}

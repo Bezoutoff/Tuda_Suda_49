@@ -29,8 +29,8 @@ const CSV_HEADER = 'server_time_ms,market_time,sec_to_market,slug,accepting_orde
 
 // Test parameters
 const TEST_PRICE = 0.44;
-// Get expiration buffer from ORDER_CONFIG for TEST_PRICE
-const TEST_EXPIRATION_BUFFER = BOT_CONFIG.ORDER_CONFIG.find(c => c.price === TEST_PRICE)?.expirationBuffer || 30;
+// Get expiration buffer from ORDER_CONFIG for TEST_PRICE (use UP config)
+const TEST_EXPIRATION_BUFFER = BOT_CONFIG.ORDER_CONFIG.find(c => c.price === TEST_PRICE)?.up.expirationBuffer || 30;
 const MAX_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
 const INTERVAL_MS = 1;
 const DELAY_BEFORE_SPAM_MS = BOT_CONFIG.DELAY_BEFORE_SPAM_MS;

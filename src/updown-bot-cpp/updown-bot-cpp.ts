@@ -223,52 +223,54 @@ async function preSignOrders(
 ): Promise<SignedOrderInfo[]> {
   const signedOrders: SignedOrderInfo[] = [];
 
-  log('Pre-signing 10 orders...');
+  log(`Pre-signing ${BOT_CONFIG.ORDER_CONFIG.length * 2} orders...`);
 
-  for (const { price, size, expirationBuffer } of BOT_CONFIG.ORDER_CONFIG) {
-    const expirationTimestamp = marketTimestamp - expirationBuffer;
+  for (const config of BOT_CONFIG.ORDER_CONFIG) {
+    const { price, up, down } = config;
 
-    // YES order
-    const yesOrder = await tradingService.createSignedOrder({
+    // UP (YES) order
+    const upExpirationTimestamp = marketTimestamp - up.expirationBuffer;
+    const upSignedOrder = await tradingService.createSignedOrder({
       tokenId: yesTokenId,
       side: 'BUY',
       price,
-      size,
+      size: up.size,
       outcome: 'YES',
-      expirationTimestamp,
+      expirationTimestamp: upExpirationTimestamp,
       negRisk: false,
     });
 
     signedOrders.push({
-      signedOrder: yesOrder,
+      signedOrder: upSignedOrder,
       price,
-      size,
-      expirationBuffer,
+      size: up.size,
+      expirationBuffer: up.expirationBuffer,
       tokenId: yesTokenId,
       side: 'YES',
     });
 
-    // NO order
-    const noOrder = await tradingService.createSignedOrder({
+    // DOWN (NO) order
+    const downExpirationTimestamp = marketTimestamp - down.expirationBuffer;
+    const downSignedOrder = await tradingService.createSignedOrder({
       tokenId: noTokenId,
       side: 'BUY',
       price,
-      size,
+      size: down.size,
       outcome: 'NO',
-      expirationTimestamp,
+      expirationTimestamp: downExpirationTimestamp,
       negRisk: false,
     });
 
     signedOrders.push({
-      signedOrder: noOrder,
+      signedOrder: downSignedOrder,
       price,
-      size,
-      expirationBuffer,
+      size: down.size,
+      expirationBuffer: down.expirationBuffer,
       tokenId: noTokenId,
       side: 'NO',
     });
 
-    log(`  Signed: ${price} @ ${size} USDC (exp: ${new Date(expirationTimestamp * 1000).toLocaleString('ru-RU')})`);
+    log(`  ${price}: UP($${up.size}, exp:${new Date(upExpirationTimestamp * 1000).toLocaleString('ru-RU')}), DOWN($${down.size}, exp:${new Date(downExpirationTimestamp * 1000).toLocaleString('ru-RU')})`);
   }
 
   log(`Pre-signed ${signedOrders.length} orders`);

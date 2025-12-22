@@ -97,9 +97,10 @@ async function spamOrdersUntilSuccess(
   const orderConfig = BOT_CONFIG.ORDER_CONFIG;
 
   log(`Starting order spam for ${slug}:`);
-  log(`  Prices (size): ${orderConfig.map(c => `${c.price}($${c.size})`).join(', ')}`);
+  log(`  Config: ${orderConfig.map(c =>
+    `${c.price}(UP:$${c.up.size}@${c.up.expirationBuffer}s, DOWN:$${c.down.size}@${c.down.expirationBuffer}s)`
+  ).join(', ')}`);
   log(`  Total orders: ${orderConfig.length * 2} (${orderConfig.length} UP + ${orderConfig.length} DOWN)`);
-  log(`  Expirations (sec before start): ${orderConfig.map(c => c.expirationBuffer).join(', ')}`);
 
   const MAX_ORDER_ATTEMPTS = BOT_CONFIG.MAX_ORDER_ATTEMPTS;
   const PARALLEL = BOT_CONFIG.PARALLEL_SPAM_REQUESTS;
@@ -119,34 +120,36 @@ async function spamOrdersUntilSuccess(
   const signedOrders: SignedOrderInfo[] = [];
 
   try {
-    for (const { price, size, expirationBuffer } of orderConfig) {
-      const expirationTimestamp = marketTimestamp - expirationBuffer;
+    for (const config of orderConfig) {
+      const { price, up, down } = config;
+      const upExpirationTimestamp = marketTimestamp - up.expirationBuffer;
+      const downExpirationTimestamp = marketTimestamp - down.expirationBuffer;
 
       // UP order (YES token)
       const upOrder = await tradingService.createSignedOrder({
         tokenId: yesTokenId,
         side: 'BUY',
         price,
-        size,
+        size: up.size,
         outcome: 'YES',
-        expirationTimestamp,
+        expirationTimestamp: upExpirationTimestamp,
         negRisk: false,
       });
-      signedOrders.push({ signedOrder: upOrder, side: 'UP', price, expirationTimestamp, placed: false });
+      signedOrders.push({ signedOrder: upOrder, side: 'UP', price, expirationTimestamp: upExpirationTimestamp, placed: false });
 
       // DOWN order (NO token)
       const downOrder = await tradingService.createSignedOrder({
         tokenId: noTokenId,
         side: 'BUY',
         price,
-        size,
+        size: down.size,
         outcome: 'NO',
-        expirationTimestamp,
+        expirationTimestamp: downExpirationTimestamp,
         negRisk: false,
       });
-      signedOrders.push({ signedOrder: downOrder, side: 'DOWN', price, expirationTimestamp, placed: false });
+      signedOrders.push({ signedOrder: downOrder, side: 'DOWN', price, expirationTimestamp: downExpirationTimestamp, placed: false });
 
-      log(`  ${price} ($${size}): expires ${formatTimestamp(expirationTimestamp)}`);
+      log(`  ${price}: UP($${up.size}, exp:${formatTimestamp(upExpirationTimestamp)}), DOWN($${down.size}, exp:${formatTimestamp(downExpirationTimestamp)})`);
     }
     log(`All ${signedOrders.length} orders pre-signed successfully`);
   } catch (error: any) {
@@ -292,9 +295,11 @@ async function pollAndPlaceOrders(
  */
 async function main() {
   log('Starting BTC Updown Polling Bot...');
-  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c => `${c.price}($${c.size})`).join(', ')}`);
+  log(`Order config: ${BOT_CONFIG.ORDER_CONFIG.map(c =>
+    `${c.price}(UP:$${c.up.size}@${c.up.expirationBuffer}s, DOWN:$${c.down.size}@${c.down.expirationBuffer}s)`
+  ).join(', ')}`);
   log(`Total orders: ${BOT_CONFIG.ORDER_CONFIG.length * 2} (${BOT_CONFIG.ORDER_CONFIG.length} UP + ${BOT_CONFIG.ORDER_CONFIG.length} DOWN)`);
-  log(`Total size: $${BOT_CONFIG.ORDER_CONFIG.reduce((sum, c) => sum + c.size, 0) * 2} (UP + DOWN)`);
+  log(`Total size: $${BOT_CONFIG.ORDER_CONFIG.reduce((sum, c) => sum + c.up.size + c.down.size, 0)} (UP + DOWN)`);
   log(`Poll interval: ${BOT_CONFIG.POLL_INTERVAL_MS}ms`);
   log(`Parallel requests: ${BOT_CONFIG.PARALLEL_SPAM_REQUESTS} per order, max ${BOT_CONFIG.MAX_ORDER_ATTEMPTS} attempts`);
 

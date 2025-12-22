@@ -56,3 +56,20 @@ export interface OrderUpdate {
   filledSize?: number;
   message?: string;
 }
+
+/**
+ * Side-specific order configuration (size and expiration)
+ */
+export interface SideOrderConfig {
+  size: number;              // Order size in shares
+  expirationBuffer: number;  // Seconds before market start
+}
+
+/**
+ * Order configuration with separate UP/DOWN settings
+ */
+export interface OrderConfig {
+  price: number;             // Common price for both sides
+  up: SideOrderConfig;       // UP (YES) side configuration
+  down: SideOrderConfig;     // DOWN (NO) side configuration
+}
