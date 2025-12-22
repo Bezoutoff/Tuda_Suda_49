@@ -178,5 +178,28 @@ module.exports = {
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
+
+    // ========================================================================
+    // Auto-Sell Bot (Instant Position Liquidation)
+    // ========================================================================
+    {
+      name: 'auto-sell-bot',
+      script: 'npx ts-node',
+      args: 'src/auto-sell-bot.ts',
+      cwd: '/app',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '300M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/auto-sell-bot-error.log',
+      out_file: '/app/logs/auto-sell-bot-out.log',
+      log_file: '/app/logs/auto-sell-bot-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
   ],
 };
