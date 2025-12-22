@@ -169,12 +169,12 @@ async function main() {
     onConnect: () => {
       log('Connected to Polymarket RTDS');
 
-      // Subscribe to User Channel (trade events)
+      // Subscribe to User Channel (all events)
       client.subscribe({
         subscriptions: [
           {
             topic: 'clob_user',
-            type: 'trade',
+            type: '*',  // Subscribe to ALL user events (orders, trades, fills)
             clob_auth: clobAuth,
           },
         ],
