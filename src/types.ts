@@ -29,6 +29,13 @@ export interface CreateOrderRequest {
   expirationTimestamp?: number;
 }
 
+export interface CreateMarketOrderRequest {
+  tokenId: string;
+  side: OrderSide;
+  amount: number;  // For SELL: shares to sell, for BUY: USDC to spend
+  orderType?: 'FOK' | 'FAK';  // Default: FOK (Fill-or-Kill)
+}
+
 export interface Order {
   orderId: string;
   tokenId: string;
@@ -39,7 +46,7 @@ export interface Order {
   outcome: string;
   status: 'PENDING' | 'OPEN' | 'MATCHED' | 'CANCELLED' | 'FAILED';
   timestamp: Date;
-  orderType?: 'GTC' | 'GTD';
+  orderType?: 'GTC' | 'GTD' | 'FOK' | 'FAK';
   expirationTime?: Date;
 }
 

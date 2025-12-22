@@ -5,6 +5,8 @@
   "main": "src/bot.ts",
   "scripts": {
     "start": "ts-node src/bot.ts",
+    "auto-sell": "ts-node src/auto-sell-bot.ts",
+    "auto-sell:build": "tsc && node dist/auto-sell-bot.js",
     "build": "tsc",
     "dev": "ts-node-dev src/bot.ts",
     "test-order": "ts-node src/test-order.ts",

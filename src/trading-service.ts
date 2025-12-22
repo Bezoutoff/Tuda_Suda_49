@@ -5,7 +5,7 @@
 
 import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { Wallet } from 'ethers';
-import { TradingConfig, CreateOrderRequest, Order } from './types';
+import { TradingConfig, CreateOrderRequest, CreateMarketOrderRequest, Order } from './types';
 import { PositionData } from './telegram-bot/types';
 
 /**
@@ -326,5 +326,52 @@ export class TradingService {
       console.error('[TRADING] Failed to fetch positions:', error);
       throw error;
     }
+  }
+
+  /**
+   * Create and post a market order (FOK/FAK)
+   * For instant selling of positions
+   */
+  async createAndPostMarketOrder(request: CreateMarketOrderRequest): Promise<Order> {
+    if (!this.isInitialized || !this.client) {
+      throw new Error('Trading service not initialized');
+    }
+
+    const { tokenId, side, amount, orderType = 'FOK' } = request;
+
+    console.log(`[TRADING] Creating market order: ${side} ${amount} shares of ${tokenId} (${orderType})`);
+
+    // Create market order
+    const userMarketOrder: any = {
+      tokenID: tokenId,
+      amount: amount,  // For SELL: shares to sell
+      side: side === 'BUY' ? Side.BUY : Side.SELL,
+    };
+
+    // Determine order type
+    const orderTypeEnum = orderType === 'FAK' ? OrderType.FAK : OrderType.FOK;
+
+    // Create and post market order
+    const orderResponse = await this.client.createAndPostMarketOrder(
+      userMarketOrder,
+      undefined,  // options
+      orderTypeEnum,
+      false  // deferExec
+    );
+
+    console.log(`Market order created: ${orderResponse.orderID || 'N/A'}`);
+
+    return {
+      orderId: orderResponse.orderID || '',
+      tokenId: tokenId,
+      side: side,
+      price: 0,  // Market order (no fixed price)
+      size: amount,
+      filledSize: 0,
+      outcome: side === 'BUY' ? 'YES' : 'NO',
+      status: 'OPEN',
+      timestamp: new Date(),
+      orderType: orderType,
+    };
   }
 }

@@ -153,5 +153,25 @@ module.exports = {
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
+
+    {
+      name: 'auto-sell-bot',
+      script: './node_modules/.bin/ts-node',
+      args: 'src/auto-sell-bot.ts',
+      cwd: '/root/Tuda_Suda_49',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '300M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: './logs/auto-sell-bot-error.log',
+      out_file: './logs/auto-sell-bot-out.log',
+      log_file: './logs/auto-sell-bot-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
   ],
 };

@@ -58,6 +58,18 @@ export const BOT_CONFIG = {
   },
 };
 
+// Auto-Sell Bot configuration
+export const AUTO_SELL_CONFIG = {
+  // Market order type (FOK = all-or-nothing, FAK = partial fills allowed)
+  DEFAULT_ORDER_TYPE: 'FOK' as 'FOK' | 'FAK',
+
+  // Fallback to FAK if FOK fails
+  FALLBACK_TO_FAK: true,
+
+  // Logging prefix
+  LOG_PREFIX: '[AUTO-SELL]',
+};
+
 // Trading configuration (from .env)
 export const tradingConfig: TradingConfig = {
   privateKey: process.env.PK ? `0x${process.env.PK}` : '',
