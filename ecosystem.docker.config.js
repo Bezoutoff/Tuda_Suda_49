@@ -212,7 +212,7 @@ module.exports = {
     {
       name: 'updown-bot-49',
       script: 'src/updown-bot-49.ts',
-      interpreter: './node_modules/.bin/ts-node',
+      interpreter: '/app/node_modules/.bin/ts-node',
       args: 'updown-15m-1234567890',  // REPLACE with actual timestamp!
       cwd: '/app',
       instances: 1,
