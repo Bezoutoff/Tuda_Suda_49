@@ -174,10 +174,12 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // NOTE: updown-btc-49 requires timestamp argument. Do NOT start via ecosystem config.
+    // Start manually with: pm2 start ./node_modules/.bin/ts-node --name updown-btc-49 -- src/updown-btc-49.ts btc-updown-15m-TIMESTAMP
     {
       name: 'updown-btc-49',
       script: './node_modules/.bin/ts-node',
-      args: 'src/updown-btc-49.ts',
+      args: 'src/updown-btc-49.ts btc-updown-15m-1234567890',  // REPLACE with actual timestamp!
       cwd: '/root/Tuda_Suda_49',
       instances: 1,
       autorestart: true,

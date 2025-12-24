@@ -2,9 +2,10 @@
  * BTC Updown 49 Bot
  *
  * Простая стратегия: 2 ордера по 0.49 (UP и DOWN) по 5 shares
- * Expiration: 20 минут до старта торгов
+ * Expiration: 20 минут после старта торгов
  *
- * Usage: npm run updown-btc-49 [btc-updown-15m-TIMESTAMP]
+ * Usage: npm run updown-btc-49 btc-updown-15m-TIMESTAMP
+ * Note: Timestamp argument is REQUIRED
  */
 
 import * as dotenv from 'dotenv';
@@ -289,10 +290,10 @@ async function pollAndPlaceOrders(
  * Main bot function
  */
 async function main() {
-  log('Starting BTC Updown 49 Bot...');
+  log('Starting BTC Updown 49 Bot (Manual Mode)...');
   log(`Strategy: 2 orders @ $${SIMPLE_CONFIG.PRICE} (UP and DOWN)`);
   log(`Size: ${SIMPLE_CONFIG.SIZE} shares each`);
-  log(`Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes before start`);
+  log(`Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes after start`);
   log(`Total capital: $${SIMPLE_CONFIG.SIZE * SIMPLE_CONFIG.PRICE * 2} per market`);
 
   if (!validateTradingConfig(tradingConfig)) {
@@ -303,77 +304,57 @@ async function main() {
   const tradingService = new TradingService(tradingConfig);
   log('Trading service initialized');
 
-  // Check for manual slug argument
+  // Require timestamp argument
   const manualSlug = process.argv[2];
 
-  if (manualSlug) {
-    // Manual mode
-    log(`\n${'='.repeat(60)}`);
-    log(`MANUAL MODE: ${manualSlug}`);
-    log(`${'='.repeat(60)}`);
-
-    const match = manualSlug.match(/^(.+)-(\d+)$/);
-    if (!match) {
-      logError(`Invalid slug format: ${manualSlug}`);
-      return;
-    }
-
-    const pattern = match[1];
-    let marketTimestamp = parseInt(match[2]);
-
-    // Continuous loop
-    while (true) {
-      const slug = `${pattern}-${marketTimestamp}`;
-
-      log(`\n${'='.repeat(60)}`);
-      log(`Processing: ${slug}`);
-      log(`Market time: ${formatTimestamp(marketTimestamp)}`);
-      log(`${'='.repeat(60)}`);
-
-      const success = await pollAndPlaceOrders(tradingService, slug, marketTimestamp);
-
-      if (success) {
-        log(`Market ${slug} processed successfully!`);
-      } else {
-        logError(`Failed to process market ${slug}`);
-      }
-
-      marketTimestamp += INTERVAL_SECONDS;
-      log(`Next market: ${pattern}-${marketTimestamp} at ${formatTimestamp(marketTimestamp)}`);
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
+  if (!manualSlug) {
+    logError('ERROR: Timestamp argument is required!');
+    logError('');
+    logError('Usage:');
+    logError('  npm run updown-btc-49 btc-updown-15m-TIMESTAMP');
+    logError('');
+    logError('Example:');
+    logError('  npm run updown-btc-49 btc-updown-15m-1766571000');
+    logError('');
+    logError('To calculate next timestamp:');
+    logError('  node -e "const next = Math.ceil(Date.now() / 900000) * 900; console.log(\'btc-updown-15m-\' + next)"');
+    process.exit(1);
   }
 
-  // Auto mode
-  const processedMarkets = new Set<string>();
+  // Manual mode - continuous loop
+  log(`\n${'='.repeat(60)}`);
+  log(`MANUAL MODE: ${manualSlug}`);
+  log(`${'='.repeat(60)}`);
 
+  const match = manualSlug.match(/^(.+)-(\d+)$/);
+  if (!match) {
+    logError(`Invalid slug format: ${manualSlug}`);
+    logError('Expected format: btc-updown-15m-TIMESTAMP');
+    process.exit(1);
+  }
+
+  const pattern = match[1];
+  let marketTimestamp = parseInt(match[2]);
+
+  // Continuous loop - process markets sequentially
   while (true) {
-    const nextTimestamp = getNextMarketTimestamp();
-    const slug = `btc-updown-15m-${nextTimestamp}`;
-
-    if (processedMarkets.has(slug)) {
-      log(`Market ${slug} already processed, waiting for next...`);
-      await waitUntil((nextTimestamp + INTERVAL_SECONDS) * 1000 - SIMPLE_CONFIG.START_POLLING_BEFORE_MS);
-      continue;
-    }
+    const slug = `${pattern}-${marketTimestamp}`;
 
     log(`\n${'='.repeat(60)}`);
-    log(`Next market: ${slug}`);
-    log(`Start time: ${formatTimestamp(nextTimestamp)}`);
+    log(`Processing: ${slug}`);
+    log(`Market time: ${formatTimestamp(marketTimestamp)}`);
     log(`${'='.repeat(60)}`);
 
-    const pollStartTime = nextTimestamp * 1000 - SIMPLE_CONFIG.START_POLLING_BEFORE_MS;
-    await waitUntil(pollStartTime);
-
-    const success = await pollAndPlaceOrders(tradingService, slug, nextTimestamp);
+    const success = await pollAndPlaceOrders(tradingService, slug, marketTimestamp);
 
     if (success) {
-      processedMarkets.add(slug);
       log(`Market ${slug} processed successfully!`);
     } else {
       logError(`Failed to process market ${slug}`);
     }
+
+    marketTimestamp += INTERVAL_SECONDS;
+    log(`Next market: ${pattern}-${marketTimestamp} at ${formatTimestamp(marketTimestamp)}`);
 
     await new Promise(resolve => setTimeout(resolve, 1000));
   }

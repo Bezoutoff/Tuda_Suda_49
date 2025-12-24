@@ -205,13 +205,15 @@ module.exports = {
     },
 
     // ========================================================================
-    // BTC Updown 49 Bot (Simplified Strategy)
+    // BTC Updown 49 Bot (Simplified Strategy - MANUAL MODE ONLY)
+    // NOTE: This bot requires timestamp argument. Do NOT use ecosystem config.
+    // Start manually with: pm2 start /app/node_modules/.bin/ts-node --name updown-btc-49 -- /app/src/updown-btc-49.ts btc-updown-15m-TIMESTAMP
     // ========================================================================
     {
       name: 'updown-btc-49',
       script: 'src/updown-btc-49.ts',
       interpreter: './node_modules/.bin/ts-node',
-      args: '',  // Empty = AUTO mode, or pass btc-updown-15m-TIMESTAMP for manual
+      args: 'btc-updown-15m-1234567890',  // REPLACE with actual timestamp!
       cwd: '/app',
       instances: 1,
       autorestart: true,
