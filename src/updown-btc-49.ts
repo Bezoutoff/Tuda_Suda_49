@@ -107,13 +107,15 @@ async function placeSimpleOrders(
   log(`Placing 2 orders for ${slug}:`);
   log(`  Price: $${SIMPLE_CONFIG.PRICE}`);
   log(`  Size: ${SIMPLE_CONFIG.SIZE} shares each (UP and DOWN)`);
-  log(`  Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes before start`);
+  log(`  Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes after start`);
 
-  // Calculate expiration (20 minutes before start, accounting for Polymarket +60s)
-  const expirationBuffer = SIMPLE_CONFIG.EXPIRATION_MINUTES * 60;
-  const expirationTimestamp = marketTimestamp - expirationBuffer;
+  // Calculate expiration: AFTER market start (not before!)
+  // Polymarket adds +60s automatically, so subtract 60 from desired buffer
+  const desiredSecondsAfterStart = SIMPLE_CONFIG.EXPIRATION_MINUTES * 60; // e.g. 1200s (20 min)
+  const expirationBuffer = desiredSecondsAfterStart - 60; // Account for Polymarket +60s
+  const expirationTimestamp = marketTimestamp + expirationBuffer;
 
-  log(`  Expiration time: ${formatTimestamp(expirationTimestamp)}`);
+  log(`  Expiration time: ${formatTimestamp(expirationTimestamp)} (${SIMPLE_CONFIG.EXPIRATION_MINUTES} min after start)`);
 
   interface SignedOrderInfo {
     signedOrder: any;
