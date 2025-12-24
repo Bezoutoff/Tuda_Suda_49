@@ -85,15 +85,26 @@ npm run auto-sell
 # 1. Зайти в контейнер
 docker exec -it tuda-suda-trading bash
 
-# 2. Запустить через PM2
+# 2. Запустить через PM2 (ПРАВИЛЬНАЯ КОМАНДА!)
+pm2 start /app/node_modules/.bin/ts-node \
+  --name auto-sell-bot \
+  -- /app/src/auto-sell-bot.ts
+
+# Альтернатива (через ecosystem.config.js):
 pm2 start ecosystem.docker.config.js --only auto-sell-bot
 
 # 3. Проверить статус
 pm2 list
+# Должно быть: auto-sell-bot | online ✅
 
-# 4. Логи
+# 4. Логи (используйте combined.log!)
+tail -f /app/logs/auto-sell-bot-combined.log
+
+# Или через PM2 (может быть пустым):
 pm2 logs auto-sell-bot
 ```
+
+**ВАЖНО:** Используйте **абсолютный путь** к ts-node (`/app/node_modules/.bin/ts-node`), иначе получите ошибку "Cannot use import statement outside a module".
 
 ### Мониторинг Auto-Sell Bot
 
@@ -154,22 +165,85 @@ FUNDER=0x...  # Для фильтрации своих trades
 
 ### Troubleshooting Auto-Sell Bot
 
+**Проблема: "Cannot use import statement outside a module" (PM2 ошибка)**
+
+Самая частая проблема! Бот работает вручную (`npx ts-node src/auto-sell-bot.ts`), но падает в PM2.
+
+**Причина:** Относительный путь к ts-node в `ecosystem.docker.config.js`
+
+**Решение:**
+```bash
+# Проверить конфигурацию
+grep -A 5 "name: 'auto-sell-bot'" /app/ecosystem.docker.config.js
+
+# Должно быть:
+interpreter: '/app/node_modules/.bin/ts-node',  # ✅ АБСОЛЮТНЫЙ
+
+# НЕ должно быть:
+interpreter: './node_modules/.bin/ts-node',  # ❌ ОТНОСИТЕЛЬНЫЙ
+```
+
+**Если путь относительный - исправить:**
+1. На хосте VPS: `cd Tuda_Suda_49 && git pull` (получить последнюю версию)
+2. В контейнере: `pm2 delete auto-sell-bot`
+3. Запустить правильно (см. раздел "Запуск Auto-Sell Bot" выше)
+
+**Правильный запуск в PM2:**
+```bash
+# Вариант 1: Прямая команда (рекомендуется)
+pm2 start /app/node_modules/.bin/ts-node \
+  --name auto-sell-bot \
+  -- /app/src/auto-sell-bot.ts
+
+# Вариант 2: Через ecosystem.config.js (если interpreter исправлен)
+pm2 start ecosystem.docker.config.js --only auto-sell-bot
+```
+
+---
+
+**Проблема: PM2 логи пустые, но combined.log полный**
+
+```bash
+# PM2 logs показывает пустоту
+pm2 logs auto-sell-bot
+# (no output)
+
+# Но combined.log содержит данные
+tail -f /app/logs/auto-sell-bot-combined.log
+# [AUTO-SELL] Starting...
+```
+
+**Причина:** PM2 пишет в combined.log, но `pm2 logs` читает из out.log/error.log
+
+**Решение:** Читать combined.log напрямую:
+```bash
+tail -f /app/logs/auto-sell-bot-combined.log
+```
+
+Или перезапустить с исправленной конфигурацией (см. выше).
+
+---
+
 **Проблема: WebSocket отключается (code 1006)**
 - Это нормально - RTDS периодически разрывает соединение
 - Бот автоматически переподключается
 
 **Проблема: Позиции не продаются**
 - Проверьте FUNDER address в .env (должен совпадать с кошельком)
-- Проверьте логи: `pm2 logs auto-sell-bot`
+- Проверьте логи: `tail -f /app/logs/auto-sell-bot-combined.log`
 - Перезапустите: `pm2 restart auto-sell-bot`
 
-**Проблема: Бот не запускается**
+**Проблема: Бот не запускается вообще**
 ```bash
 # Проверить credentials
 cat .env | grep -E "CLOB|FUNDER"
 
+# Проверить PM2 статус
+pm2 list
+# Должно быть: auto-sell-bot | online
+
 # Логи ошибок
-pm2 logs auto-sell-bot --err
+tail -100 /app/logs/auto-sell-bot-combined.log
 ```
 
 ---
@@ -183,7 +257,9 @@ pm2 logs auto-sell-bot --err
 docker exec -it tuda-suda-trading bash
 
 # 2. Запустить auto-sell-bot (сначала!)
-pm2 start ecosystem.docker.config.js --only auto-sell-bot
+pm2 start /app/node_modules/.bin/ts-node \
+  --name auto-sell-bot \
+  -- /app/src/auto-sell-bot.ts
 
 # 3. Вычислить timestamp
 node -e "const next = Math.ceil(Date.now() / 900000) * 900; console.log('updown-15m-' + next)"

@@ -206,6 +206,51 @@ npm run build
 
 ## Troubleshooting
 
+### Auto-Sell Bot: "Cannot use import statement outside a module"
+
+**Проблема:** Бот работает вручную (`npx ts-node src/auto-sell-bot.ts`), но падает в PM2.
+
+**Причина:** Относительный путь к ts-node в `ecosystem.docker.config.js`
+
+**Решение:**
+```bash
+# В Docker контейнере
+pm2 delete auto-sell-bot
+pm2 start /app/node_modules/.bin/ts-node \
+  --name auto-sell-bot \
+  -- /app/src/auto-sell-bot.ts
+```
+
+**Проверка конфигурации:**
+```bash
+grep "interpreter" /app/ecosystem.docker.config.js | grep auto-sell
+# Должно быть: interpreter: '/app/node_modules/.bin/ts-node',
+```
+
+### PM2 логи пустые (auto-sell-bot, updown-bot-49)
+
+**Проблема:** `pm2 logs bot-name` показывает пустоту
+
+**Решение:** Читать combined.log напрямую:
+```bash
+tail -f /app/logs/auto-sell-bot-combined.log
+tail -f /app/logs/updown-bot-49-combined.log
+```
+
+### Сетевые ошибки (EPIPE, EAI_AGAIN, TLS disconnect)
+
+**Проблема:** Множество ошибок при spam запросах:
+```
+[CLOB Client] request error {"error":"write EPIPE"}
+[CLOB Client] request error {"error":"getaddrinfo EAI_AGAIN"}
+```
+
+**Причина:** Слишком интенсивный spam (5ms = 1600 req/sec)
+
+**Решение:** Обновить код (уже исправлено в последней версии):
+- STREAM_INTERVAL_MS: 5ms → 20ms
+- POLL_INTERVAL_MS: 250ms → 350ms
+
 ### Ошибка "API credentials required"
 Проверьте что в .env заданы CLOB_API_KEY, CLOB_SECRET, CLOB_PASS_PHRASE
 
@@ -1246,6 +1291,9 @@ WARN: the attribute `version` is obsolete
 
 ## История
 
+- **2025-12-24**: Fix auto-sell-bot PM2 error - абсолютный путь ts-node interpreter в ecosystem.docker.config.js. Решена проблема "Cannot use import statement outside a module"
+- **2025-12-24**: Оптимизация network intervals - STREAM_INTERVAL_MS: 5ms→20ms, POLL_INTERVAL_MS: 250ms→350ms. Снижение spam: 1600→400 req/sec, исправлены EPIPE/EAI_AGAIN ошибки
+- **2025-12-24**: Fix updown-bot-49 ts-node error - абсолютный путь interpreter для Docker PM2
 - **2025-12-24**: updown-bot-49 - мультивалютный бот (BTC, ETH, SOL, XRP), параллельная обработка Promise.all, manual mode, $19.60 capital per timestamp
 - **2025-12-24**: updown-btc-49 Bot - упрощенная стратегия (2 ордера по $0.49, 5 shares, manual mode only, expiration fixed)
 - **2025-12-24**: Fix expiration logic - теперь после старта маркета, не до старта
