@@ -174,23 +174,23 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
-    // NOTE: updown-btc-49 requires timestamp argument. Do NOT start via ecosystem config.
-    // Start manually with: pm2 start ./node_modules/.bin/ts-node --name updown-btc-49 -- src/updown-btc-49.ts btc-updown-15m-TIMESTAMP
+    // NOTE: updown-bot-49 (multi-crypto) requires timestamp argument. Do NOT start via ecosystem config.
+    // Start manually with: pm2 start ./node_modules/.bin/ts-node --name updown-bot-49 -- src/updown-bot-49.ts updown-15m-TIMESTAMP
     {
-      name: 'updown-btc-49',
+      name: 'updown-bot-49',
       script: './node_modules/.bin/ts-node',
-      args: 'src/updown-btc-49.ts btc-updown-15m-1234567890',  // REPLACE with actual timestamp!
+      args: 'src/updown-bot-49.ts updown-15m-1234567890',  // REPLACE with actual timestamp!
       cwd: '/root/Tuda_Suda_49',
       instances: 1,
       autorestart: true,
       watch: false,
-      max_memory_restart: '500M',
+      max_memory_restart: '800M',  // Increased for 4 cryptos
       env: {
         NODE_ENV: 'production',
       },
-      error_file: './logs/updown-btc-49-error.log',
-      out_file: './logs/updown-btc-49-out.log',
-      log_file: './logs/updown-btc-49-combined.log',
+      error_file: './logs/updown-bot-49-error.log',
+      out_file: './logs/updown-bot-49-out.log',
+      log_file: './logs/updown-bot-49-combined.log',
       time: true,
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',

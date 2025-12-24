@@ -1246,6 +1246,7 @@ WARN: the attribute `version` is obsolete
 
 ## История
 
+- **2025-12-24**: updown-bot-49 - мультивалютный бот (BTC, ETH, SOL, XRP), параллельная обработка Promise.all, manual mode, $19.60 capital per timestamp
 - **2025-12-24**: updown-btc-49 Bot - упрощенная стратегия (2 ордера по $0.49, 5 shares, manual mode only, expiration fixed)
 - **2025-12-24**: Fix expiration logic - теперь после старта маркета, не до старта
 - **2025-12-18**: VPS Deployment Guide - инструкции для Ubuntu 23.04+ (venv, PEP 668, systemd configuration)

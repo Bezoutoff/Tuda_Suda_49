@@ -205,26 +205,26 @@ module.exports = {
     },
 
     // ========================================================================
-    // BTC Updown 49 Bot (Simplified Strategy - MANUAL MODE ONLY)
+    // Multi-Crypto Updown 49 Bot (BTC, ETH, SOL, XRP - MANUAL MODE ONLY)
     // NOTE: This bot requires timestamp argument. Do NOT use ecosystem config.
-    // Start manually with: pm2 start /app/node_modules/.bin/ts-node --name updown-btc-49 -- /app/src/updown-btc-49.ts btc-updown-15m-TIMESTAMP
+    // Start manually with: pm2 start /app/node_modules/.bin/ts-node --name updown-bot-49 -- /app/src/updown-bot-49.ts updown-15m-TIMESTAMP
     // ========================================================================
     {
-      name: 'updown-btc-49',
-      script: 'src/updown-btc-49.ts',
+      name: 'updown-bot-49',
+      script: 'src/updown-bot-49.ts',
       interpreter: './node_modules/.bin/ts-node',
-      args: 'btc-updown-15m-1234567890',  // REPLACE with actual timestamp!
+      args: 'updown-15m-1234567890',  // REPLACE with actual timestamp!
       cwd: '/app',
       instances: 1,
       autorestart: true,
       watch: false,
-      max_memory_restart: '500M',
+      max_memory_restart: '800M',  // Increased for 4 cryptos
       env: {
         NODE_ENV: 'production',
       },
-      error_file: '/app/logs/updown-btc-49-error.log',
-      out_file: '/app/logs/updown-btc-49-out.log',
-      log_file: '/app/logs/updown-btc-49-combined.log',
+      error_file: '/app/logs/updown-bot-49-error.log',
+      out_file: '/app/logs/updown-bot-49-out.log',
+      log_file: '/app/logs/updown-bot-49-combined.log',
       time: true,
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',

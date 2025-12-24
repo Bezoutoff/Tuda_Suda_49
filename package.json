@@ -17,7 +17,7 @@
     "test-latency-cpp": "ts-node src/test-latency-cpp.ts",
     "build:cpp": "bash build-cpp.sh",
     "updown-bot": "ts-node src/updown-bot-cpp/updown-bot-cpp.ts",
-    "updown-btc-49": "ts-node src/updown-btc-49.ts",
+    "updown-bot-49": "ts-node src/updown-bot-49.ts",
     "build:updown-bot": "bash build-updown-bot.sh",
     "build:all-cpp": "npm run build:cpp && npm run build:updown-bot",
     "fill-timestamps": "ts-node scripts/fill-accepting-timestamp.ts",
