@@ -784,8 +784,469 @@ RelayerApiException[status_code=401, error_message={'error': 'invalid authorizat
 
 ---
 
+## Auto-Sell Bot - Автоматическая продажа позиций
+
+### Обзор
+
+**Auto-Sell Bot** — автоматический бот для мгновенной продажи позиций на Polymarket через market orders. Отслеживает появление новых позиций через WebSocket User Channel и автоматически продаёт их market order'ом (FOK).
+
+### Архитектура
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Auto-Sell Bot (src/auto-sell-bot.ts)                      │
+│  ┌───────────────────────────────────────────────┐         │
+│  │ 1. WebSocket User Channel → clob_user         │         │
+│  │    Подписка на ВСЕ события: type: '*'         │         │
+│  └───────────────┬───────────────────────────────┘         │
+│                  ▼                                          │
+│  ┌───────────────────────────────────────────────┐         │
+│  │ 2. handleTradeEvent()                         │         │
+│  │    Фильтрация:                                │         │
+│  │    - side === 'BUY' (позиция открылась)       │         │
+│  │    - maker_address === funder (наш кошелек)   │         │
+│  │    - Deduplication (Set<tradeId>)             │         │
+│  └───────────────┬───────────────────────────────┘         │
+│                  ▼                                          │
+│  ┌───────────────────────────────────────────────┐         │
+│  │ 3. sellPosition()                             │         │
+│  │    Market order SELL:                         │         │
+│  │    - OrderType: FOK (Fill-or-Kill)            │         │
+│  │    - Fallback: FAK (Fill-and-Kill)            │         │
+│  │    - Instant execution                        │         │
+│  └───────────────────────────────────────────────┘         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Файлы
+
+```
+src/
+├── auto-sell-bot.ts             # Entry point (WebSocket + trading logic)
+├── trading-service.ts           # Добавлен createAndPostMarketOrder()
+├── types.ts                     # CreateMarketOrderRequest interface
+└── config.ts                    # AUTO_SELL_CONFIG
+
+ecosystem.config.js              # PM2 конфигурация (local VPS)
+ecosystem.docker.config.js       # PM2 конфигурация (Docker)
+```
+
+### Логика работы
+
+1. **WebSocket подписка**:
+   - Topic: `clob_user`
+   - Type: `*` (все события: FILL, MATCH, PLACEMENT, etc.)
+   - Auth: CLOB credentials (API_KEY, SECRET, PASSPHRASE)
+
+2. **Определение новой позиции**:
+   ```typescript
+   if (side === 'BUY' &&
+       maker_address === funder &&
+       !processedTrades.has(tradeId)) {
+     // Позиция открылась - продать!
+   }
+   ```
+
+3. **Продажа через market order**:
+   ```typescript
+   await tradingService.createAndPostMarketOrder({
+     tokenId: assetId,
+     side: 'SELL',
+     amount: size,  // Количество шер для продажи
+     orderType: 'FOK'  // Fill-or-Kill (всё или ничего)
+   });
+   ```
+
+4. **Fallback при недостаточной ликвидности**:
+   - Если FOK не исполнился → retry с FAK (частичное исполнение OK)
+
+### Market Orders (FOK vs FAK)
+
+| OrderType | Поведение | Использование |
+|-----------|-----------|---------------|
+| **FOK** (Fill-or-Kill) | Либо исполняется полностью, либо отменяется | По умолчанию для instant sell |
+| **FAK** (Fill-and-Kill) | Частичное исполнение, остаток отменяется | Fallback при низкой ликвидности |
+
+### Установка и запуск
+
+**Local VPS (без Docker):**
+```bash
+# Запуск через npm
+npm run auto-sell
+
+# Или через PM2
+pm2 start ecosystem.config.js --only auto-sell-bot
+pm2 logs auto-sell-bot
+```
+
+**Docker:**
+```bash
+# Контейнеры запускаются БЕЗ автостарта ботов (docker-compose.override.yml)
+docker compose up -d
+
+# Зайти в контейнер
+docker exec -it tuda-suda-trading bash
+
+# Запустить auto-sell-bot вручную
+pm2 start ./node_modules/.bin/ts-node --name auto-sell-bot -- src/auto-sell-bot.ts
+pm2 logs auto-sell-bot
+```
+
+### Конфигурация
+
+**Файл:** `src/config.ts`
+
+```typescript
+export const AUTO_SELL_CONFIG = {
+  DEFAULT_ORDER_TYPE: 'FOK' as 'FOK' | 'FAK',
+  FALLBACK_TO_FAK: true,
+  LOG_PREFIX: '[AUTO-SELL]',
+};
+```
+
+**Environment variables (.env):**
+- `CLOB_API_KEY` - Polymarket CLOB API key
+- `CLOB_SECRET` - Polymarket CLOB API secret
+- `CLOB_PASS_PHRASE` - Polymarket CLOB API passphrase
+- `FUNDER` - Funder address (для фильтрации своих trades)
+
+### Trading Service расширение
+
+**Добавлен метод:** `createAndPostMarketOrder()`
+
+```typescript
+// src/trading-service.ts
+async createAndPostMarketOrder(request: CreateMarketOrderRequest): Promise<Order> {
+  const userMarketOrder = {
+    tokenID: request.tokenId,
+    amount: request.amount,  // Для SELL: кол-во шер
+    side: request.side === 'BUY' ? Side.BUY : Side.SELL,
+  };
+
+  const orderType = request.orderType === 'FAK' ? OrderType.FAK : OrderType.FOK;
+
+  const orderResponse = await this.client.createAndPostMarketOrder(
+    userMarketOrder,
+    undefined,
+    orderTypeEnum,
+    false
+  );
+
+  return { orderId: orderResponse.orderID, ... };
+}
+```
+
+### Troubleshooting
+
+#### Позиция открывается но не продаётся
+
+**Проблема:** Events не приходят от WebSocket.
+
+**Решение:**
+1. Проверить что подписка использует `type: '*'` (не `type: 'trade'`)
+2. Проверить CLOB credentials в .env
+3. Проверить что FUNDER address совпадает с адресом на Polymarket
+4. Включить debug логирование:
+   ```typescript
+   log(`[DEBUG] Received message - topic: ${topic}, type: ${msgType}`);
+   ```
+
+#### WebSocket отключается (code 1006)
+
+**Проблема:** Аномальное закрытие соединения.
+
+**Причина:** Polymarket RTDS периодически разрывает соединение.
+
+**Решение:** RealTimeDataClient автоматически переподключается. События между разрывами не теряются если reconnect быстрый.
+
+#### Market order не исполняется
+
+**Проблема:** Недостаточная ликвидность для FOK.
+
+**Решение:** Автоматический fallback на FAK (частичное исполнение).
+
+### Debug режим
+
+**Включить verbose логирование:**
+```typescript
+// В handleMessage() добавлено:
+log(`[DEBUG] Received message - topic: ${topic}, type: ${msgType}`);
+if (topic === 'clob_user') {
+  log(`[DEBUG] User channel message:`, JSON.stringify(data, null, 2));
+}
+```
+
+Логи покажут:
+- Все входящие WebSocket события
+- Формат trade events
+- Почему фильтрация не срабатывает
+
+---
+
+## Docker Deployment
+
+### Обзор
+
+Проект поддерживает **one-click deployment** через Docker Compose. Все боты и сервисы запускаются в изолированных контейнерах с автоматической сборкой TypeScript и C++ компонентов.
+
+### Архитектура Docker
+
+```
+Docker Compose
+├── trading-bot container (Node.js 18 + Python 3.9)
+│   ├── PM2 process manager
+│   │   ├── updown-btc, updown-eth, updown-sol, updown-xrp
+│   │   ├── updown-polling, updown-ws
+│   │   ├── telegram-bot
+│   │   └── auto-sell-bot
+│   ├── TypeScript compiled to dist/
+│   ├── C++ binaries (optional, BUILD_CPP=true)
+│   └── Logs → ./logs/ (bind mount)
+│
+└── redemption-scheduler container (Python 3.9)
+    ├── Runs every 60 minutes
+    ├── Python venv (/opt/venv)
+    └── Logs → ./logs/ (bind mount)
+```
+
+### Файлы Docker конфигурации
+
+```
+Tuda_Suda_49/
+├── Dockerfile                      # Multi-stage build (cpp → node → final)
+├── docker-compose.yml              # Основная конфигурация сервисов
+├── docker-compose.override.yml     # Override для ручного запуска ботов
+├── docker-entrypoint.sh            # Entrypoint script (validation + PM2 start)
+├── docker-redemption-scheduler.sh  # Redemption loop script
+└── ecosystem.docker.config.js      # PM2 config для Docker окружения
+```
+
+### Multi-Stage Dockerfile
+
+**Stage 1: cpp-builder** (Ubuntu 24.04)
+- Компиляция C++ latency тестов и trading бинарников
+- Зависимости: build-essential, libcurl, libssl
+- Output: `dist/updown-bot-cpp`, `dist/test-latency-cpp`
+
+**Stage 2: node-builder** (Node 18 Alpine)
+- npm install --production
+- TypeScript compilation (tsc)
+- Output: `dist/*.js`, `node_modules/`
+
+**Stage 3: final** (Node 18 Debian Slim)
+- Копирование артефактов из stage 1 и 2
+- Python 3.9 + venv (PEP 668 compliance)
+- PM2 установлен глобально
+- Final image: ~800MB
+
+### docker-compose.override.yml
+
+**Назначение:** Переопределяет автозапуск ботов для ручного управления.
+
+```yaml
+services:
+  trading-bot:
+    entrypoint: /bin/bash
+    command: -c "tail -f /dev/null"
+    healthcheck:
+      test: ["CMD", "echo", "ok"]
+      interval: 10s
+```
+
+**Результат:**
+- Контейнер запускается БЕЗ автостарта PM2 ботов
+- Пользователь заходит в контейнер и запускает нужных ботов вручную
+- Гибкое управление без пересборки образов
+
+### ecosystem.docker.config.js
+
+**Отличия от ecosystem.config.js (local VPS):**
+- Paths: `/app` вместо `/root/Tuda_Suda_49`
+- Interpreter: `./node_modules/.bin/ts-node` (абсолютный путь)
+- Logs: `/app/logs/` (Docker volume mount)
+
+**Правильный формат для PM2 + ts-node:**
+```javascript
+{
+  name: 'auto-sell-bot',
+  script: 'src/auto-sell-bot.ts',          // Путь к файлу
+  interpreter: './node_modules/.bin/ts-node',  // Интерпретатор
+  args: '',                                 // Аргументы (если есть)
+  cwd: '/app',
+}
+```
+
+**❌ Неправильный формат (PM2 ошибка "Script not found"):**
+```javascript
+{
+  script: 'npx ts-node',  // ❌ PM2 ищет файл /app/npx
+  args: 'src/auto-sell-bot.ts',
+}
+```
+
+### Запуск и управление
+
+**Quick start:**
+```bash
+git clone https://github.com/Bezoutoff/Tuda_Suda_49.git
+cd Tuda_Suda_49
+cp .env.example .env
+nano .env  # Заполнить credentials
+
+docker compose up -d
+```
+
+**Ручной запуск ботов:**
+```bash
+# Зайти в контейнер
+docker exec -it tuda-suda-trading bash
+
+# Запустить нужного бота
+pm2 start ./node_modules/.bin/ts-node --name auto-sell-bot -- src/auto-sell-bot.ts
+
+# Или через ecosystem.docker.config.js
+pm2 start ecosystem.docker.config.js --only auto-sell-bot
+
+# Логи
+pm2 logs auto-sell-bot
+
+# Статус
+pm2 list
+
+# Остановить
+pm2 stop auto-sell-bot
+```
+
+**Управление контейнерами:**
+```bash
+# Статус
+docker compose ps
+
+# Логи
+docker compose logs -f trading-bot
+
+# Перезапуск
+docker compose restart trading-bot
+
+# Остановка
+docker compose down
+
+# Пересборка
+docker compose build --no-cache
+docker compose up -d
+```
+
+### Build Arguments
+
+**BUILD_CPP** - компиляция C++ компонентов:
+```yaml
+# docker-compose.yml
+services:
+  trading-bot:
+    build:
+      args:
+        BUILD_CPP: "true"  # Компилировать C++ (по умолчанию)
+        # BUILD_CPP: "false"  # Пропустить C++ (быстрее)
+```
+
+### Volume Mounts
+
+```yaml
+volumes:
+  - ./logs:/app/logs        # Логи доступны на хосте
+  - ./.env:/app/.env:ro     # Environment variables (read-only)
+```
+
+**Логи сохраняются на хосте:**
+```bash
+ls -lh logs/
+tail -f logs/auto-sell-bot-out.log
+tail -f logs/redemption.csv
+```
+
+### Health Checks
+
+**trading-bot:**
+```yaml
+healthcheck:
+  test: ["CMD", "echo", "ok"]  # Упрощенный (override)
+  # test: ["CMD", "pm2", "ping"]  # Оригинальный (закомментирован)
+  interval: 10s
+```
+
+**Почему упрощенный:**
+- PM2 не запускается автоматически (override)
+- `echo ok` всегда возвращает успех
+- Контейнер healthy даже без запущенных ботов
+
+### Troubleshooting Docker
+
+#### Container is unhealthy / restarting
+
+**Проблема:** Контейнер постоянно рестартится.
+
+**Причина:** Ошибка в entrypoint или PM2 конфигурации.
+
+**Решение:**
+```bash
+# Посмотреть логи
+docker compose logs trading-bot --tail=100
+
+# Проверить что docker-compose.override.yml существует
+cat docker-compose.override.yml
+
+# Пересоздать контейнеры
+docker compose down
+docker compose up -d
+```
+
+#### PM2 Script not found: /app/ts-node
+
+**Проблема:** Неправильный формат в ecosystem.docker.config.js.
+
+**Причина:** `script: 'npx ts-node'` вместо правильного формата.
+
+**Решение:**
+```javascript
+// ✅ Правильно
+{
+  script: 'src/auto-sell-bot.ts',
+  interpreter: './node_modules/.bin/ts-node',
+}
+
+// ❌ Неправильно
+{
+  script: 'npx ts-node',
+  args: 'src/auto-sell-bot.ts',
+}
+```
+
+#### Version warning в docker-compose.yml
+
+**Проблема:**
+```
+WARN: the attribute `version` is obsolete
+```
+
+**Причина:** Docker Compose v2 не требует version.
+
+**Решение:** Удалена строка `version: '3.8'` из docker-compose.yml.
+
+### Документация
+
+Подробная инструкция в `README.docker.md`:
+- Установка Docker на Ubuntu
+- Quick Start за 3 команды
+- Конфигурация и build arguments
+- Мониторинг и логи
+- Troubleshooting
+- Миграция с systemd на Docker
+
+---
+
 ## История
 
+- **2025-12-24**: updown-btc-49 Bot - упрощенная стратегия (2 ордера по $0.49, 5 shares, AUTO/Manual режимы)
 - **2025-12-18**: VPS Deployment Guide - инструкции для Ubuntu 23.04+ (venv, PEP 668, systemd configuration)
 - **2025-12-18**: Redemption Tracker - пропуск уже выкупленных позиций (redeemed_tracker.py). Экономия ~90% API запросов, 30-60 сек на запуск
 - **2025-12-15**: Redemption Bot debugging - исправлены API парсинг, SDK интеграция, calldata формирование. Осталась проблема 401 авторизации с relayer.

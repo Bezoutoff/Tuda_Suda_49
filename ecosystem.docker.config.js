@@ -203,5 +203,29 @@ module.exports = {
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
+
+    // ========================================================================
+    // BTC Updown 49 Bot (Simplified Strategy)
+    // ========================================================================
+    {
+      name: 'updown-btc-49',
+      script: 'src/updown-btc-49.ts',
+      interpreter: './node_modules/.bin/ts-node',
+      args: '',  // Empty = AUTO mode, or pass btc-updown-15m-TIMESTAMP for manual
+      cwd: '/app',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/app/logs/updown-btc-49-error.log',
+      out_file: '/app/logs/updown-btc-49-out.log',
+      log_file: '/app/logs/updown-btc-49-combined.log',
+      time: true,
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
   ],
 };
