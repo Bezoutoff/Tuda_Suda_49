@@ -187,7 +187,7 @@ module.exports = {
     {
       name: 'auto-sell-bot',
       script: 'src/auto-sell-bot.ts',
-      interpreter: './node_modules/.bin/ts-node',
+      interpreter: '/app/node_modules/.bin/ts-node',
       cwd: '/app',
       instances: 1,
       autorestart: true,
