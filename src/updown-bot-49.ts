@@ -34,7 +34,7 @@ const SIMPLE_CONFIG = {
   PRICE: 0.49,
   SIZE: 5,
   EXPIRATION_MINUTES: 20, // 20 минут после старта
-  POLL_INTERVAL_MS: 250,
+  POLL_INTERVAL_MS: 350,
   DELAY_BEFORE_SPAM_MS: 22500, // 22.5 секунд после получения token IDs
   MAX_ORDER_ATTEMPTS: 2000,
   POLL_TIMEOUT_MS: 20 * 60 * 1000, // 20 минут
@@ -188,7 +188,7 @@ async function placeSimpleOrders(
   // SPAM: stream mode
   const startTime = Date.now();
   let totalAttempts = 0;
-  const STREAM_INTERVAL_MS = 5;
+  const STREAM_INTERVAL_MS = 20;
   const inFlightRequests: Promise<void>[] = [];
 
   log(`Stream spam: sending requests every ${STREAM_INTERVAL_MS}ms`, crypto);
