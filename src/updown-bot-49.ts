@@ -22,11 +22,12 @@ const SUPPORTED_CRYPTOS = ['btc', 'eth', 'sol', 'xrp'] as const;
 type CryptoSymbol = typeof SUPPORTED_CRYPTOS[number];
 
 // Конфигурация для каждой валюты (одинаковая)
+// ОПТИМИЗАЦИЯ: Отключены SOL/XRP для экономии памяти (~400MB)
 const CRYPTO_CONFIG: Record<CryptoSymbol, { enabled: boolean }> = {
-  btc: { enabled: true },
-  eth: { enabled: true },
-  sol: { enabled: true },
-  xrp: { enabled: true },
+  btc: { enabled: true },   // ✅ Активен для торговли
+  eth: { enabled: true },   // ✅ Активен для торговли
+  sol: { enabled: false },  // ❌ Отключен (экономия памяти)
+  xrp: { enabled: false },  // ❌ Отключен (экономия памяти)
 };
 
 // Простая конфигурация
