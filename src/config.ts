@@ -106,11 +106,11 @@ export const BOT_CONFIG = {
 
 // Auto-Sell Bot configuration
 export const AUTO_SELL_CONFIG = {
-  // Market order type (FOK = all-or-nothing, FAK = partial fills allowed)
-  DEFAULT_ORDER_TYPE: 'FOK' as 'FOK' | 'FAK',
+  // Sell mode: GTC limit orders
+  SELL_MODE: 'GTC' as 'GTC',
 
-  // Fallback to FAK if FOK fails
-  FALLBACK_TO_FAK: true,
+  // Limit order price (99 cents)
+  LIMIT_PRICE: 0.99,
 
   // Logging prefix
   LOG_PREFIX: '[AUTO-SELL]',

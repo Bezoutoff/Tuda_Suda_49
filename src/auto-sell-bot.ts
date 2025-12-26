@@ -79,15 +79,22 @@ async function handleTradeEvent(payload: any) {
       return;
     }
 
-    // Extract token ID and size based on role
+    // Extract token ID, size, and outcome based on role
     let tokenId: string;
     let size: string;
+    let outcome: string = 'NO'; // Default fallback
 
     if (isTaker) {
       // Taker scenario: payload has asset_id and size
       tokenId = payload.asset_id;
       size = payload.size;
-      log(`[TAKER] BUY position opened: ${size} shares of ${tokenId}`);
+
+      // Try to extract outcome from payload
+      if (payload.outcome) {
+        outcome = payload.outcome;
+      }
+
+      log(`[TAKER] BUY position opened: ${size} shares of ${tokenId} (outcome: ${outcome})`);
     } else {
       // Maker scenario: data in maker_orders array
       const ourOrder = payload.maker_orders.find((order: any) =>
@@ -95,7 +102,13 @@ async function handleTradeEvent(payload: any) {
       );
       tokenId = ourOrder?.asset_id;
       size = ourOrder?.matched_amount;
-      log(`[MAKER] BUY position filled: ${size} shares of ${tokenId}`);
+
+      // Try to extract outcome from maker order
+      if (ourOrder?.outcome) {
+        outcome = ourOrder.outcome;
+      }
+
+      log(`[MAKER] BUY position filled: ${size} shares of ${tokenId} (outcome: ${outcome})`);
     }
 
     if (!tokenId || !size) {
@@ -111,9 +124,9 @@ async function handleTradeEvent(payload: any) {
     log(`[TRIGGER] Waiting ${DELAY_MS / 1000}s for blockchain confirmation...`);
     await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
-    // Trigger auto-sell
-    log(`[TRIGGER] Auto-selling ${size} shares of ${tokenId} (trade: ${tradeId})`);
-    await sellPosition(tokenId, parseFloat(size));
+    // Trigger auto-sell with outcome
+    log(`[TRIGGER] Auto-selling ${size} shares of ${tokenId} (outcome: ${outcome}, trade: ${tradeId})`);
+    await sellPosition(tokenId, parseFloat(size), outcome);
 
   } catch (error: any) {
     logError('Error handling trade event:', error.message);
@@ -121,42 +134,25 @@ async function handleTradeEvent(payload: any) {
 }
 
 /**
- * Sell position via market order (FOK)
+ * Sell position via GTC limit order @ 0.99
  */
-async function sellPosition(tokenId: string, size: number) {
+async function sellPosition(tokenId: string, size: number, outcome: string) {
   try {
-    log(`Selling ${size} shares of ${tokenId}...`);
+    log(`Placing GTC limit order: ${size} shares @ $0.99 (outcome: ${outcome})`);
 
-    const result = await tradingService.createAndPostMarketOrder({
+    const result = await tradingService.createLimitOrder({
       tokenId,
       side: 'SELL',
-      amount: size,
-      orderType: 'FOK',  // Fill-or-Kill (all or nothing)
+      price: 0.99,      // Fixed price: 99 cents
+      size: size,       // Number of shares
+      outcome: outcome, // YES or NO
+      // expirationTimestamp not needed for GTC
     });
 
-    log(`Position sold: orderId=${result.orderId}, tokenId=${tokenId}, size=${size}`);
+    log(`GTC order placed: orderId=${result.orderId}, tokenId=${tokenId}, price=0.99, size=${size}`);
 
   } catch (error: any) {
-    // Check if it's insufficient liquidity error
-    if (error.message?.includes('insufficient')) {
-      log(`Insufficient liquidity for FOK, trying FAK...`);
-
-      try {
-        // Retry with FAK (partial fill allowed)
-        const result = await tradingService.createAndPostMarketOrder({
-          tokenId,
-          side: 'SELL',
-          amount: size,
-          orderType: 'FAK',  // Fill-and-Kill (partial OK)
-        });
-
-        log(`Position partially sold: orderId=${result.orderId}, tokenId=${tokenId}`);
-      } catch (fallbackError: any) {
-        logError(`Failed to sell position (FAK fallback):`, fallbackError.message);
-      }
-    } else {
-      logError(`Failed to sell position:`, error.message);
-    }
+    logError(`Failed to place GTC limit order:`, error.message);
   }
 }
 
