@@ -10,6 +10,9 @@ import { RealTimeDataClient } from '@polymarket/real-time-data-client';
 import { TradingService } from './trading-service';
 import { tradingConfig, AUTO_SELL_CONFIG } from './config';
 
+// Debug mode (set DEBUG=1 in .env to enable verbose logging)
+const DEBUG_MODE = process.env.DEBUG === '1';
+
 // Logging helpers
 function log(message: string, ...args: any[]) {
   const timestamp = new Date().toLocaleString('ru-RU');
@@ -21,8 +24,24 @@ function logError(message: string, ...args: any[]) {
   console.error(`[${timestamp}] [AUTO-SELL] ERROR:`, message, ...args);
 }
 
-// Processed trades (deduplication)
-const processedTrades = new Set<string>();
+// Processed trades (deduplication with TTL)
+const processedTrades = new Map<string, number>(); // tradeId -> timestamp
+const PROCESSED_TRADES_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Cleanup old trades periodically
+const cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [tradeId, timestamp] of processedTrades.entries()) {
+    if (now - timestamp > PROCESSED_TRADES_TTL_MS) {
+      processedTrades.delete(tradeId);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    log(`[CLEANUP] Removed ${cleaned} old trades from cache (size: ${processedTrades.size})`);
+  }
+}, 60 * 60 * 1000); // Cleanup every hour
 
 // Trading service instance
 let tradingService: TradingService;
@@ -85,7 +104,7 @@ async function handleTradeEvent(payload: any) {
     }
 
     // Mark as processed BEFORE selling (prevent double-sell on error)
-    processedTrades.add(tradeId);
+    processedTrades.set(tradeId, Date.now());
 
     // Wait for blockchain confirmation (tokens need to settle)
     const DELAY_MS = 15000; // 15 seconds
@@ -152,8 +171,10 @@ function handleMessage(client: any, message: any) {
     const topic = data.topic || '';
     const msgType = data.type || '';
 
-    // DEBUG: Log incoming messages
-    log(`[DEBUG] Message - topic: "${topic}", type: "${msgType}"`);
+    // DEBUG: Log incoming messages (only if DEBUG=1)
+    if (DEBUG_MODE) {
+      log(`[DEBUG] Message - topic: "${topic}", type: "${msgType}"`);
+    }
 
     // Handle trade events - data is in payload!
     if (topic === 'clob_user' && msgType === 'trade') {
@@ -205,7 +226,9 @@ async function main() {
       log('Connected to Polymarket RTDS');
 
       // Subscribe to User Channel (all events)
-      log(`[DEBUG] Subscribing with API KEY: ${clobAuth.key?.substring(0, 12)}...`);
+      if (DEBUG_MODE) {
+        log(`[DEBUG] Subscribing with API KEY: ${clobAuth.key?.substring(0, 12)}...`);
+      }
       client.subscribe({
         subscriptions: [
           {
@@ -228,6 +251,7 @@ async function main() {
   // Handle process termination
   process.on('SIGINT', () => {
     log('Shutting down...');
+    clearInterval(cleanupInterval);
     client.disconnect();
     process.exit(0);
   });

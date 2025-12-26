@@ -1013,18 +1013,44 @@ async createAndPostMarketOrder(request: CreateMarketOrderRequest): Promise<Order
 ### Debug режим
 
 **Включить verbose логирование:**
-```typescript
-// В handleMessage() добавлено:
-log(`[DEBUG] Received message - topic: ${topic}, type: ${msgType}`);
-if (topic === 'clob_user') {
-  log(`[DEBUG] User channel message:`, JSON.stringify(data, null, 2));
-}
+
+Установите `DEBUG=1` в `.env` файле:
+```bash
+DEBUG=1
 ```
 
-Логи покажут:
-- Все входящие WebSocket события
+Это включит подробное логирование всех WebSocket событий:
+- Все входящие сообщения с topic и type
+- API KEY при подписке на User Channel
 - Формат trade events
 - Почему фильтрация не срабатывает
+
+**⚠️ Важно:** DEBUG режим создаёт высокую CPU нагрузку при большом потоке сообщений. Используйте только для диагностики.
+
+### Memory и CPU оптимизации (2025-12-26)
+
+**Исправлена критическая утечка памяти:**
+
+1. **processedTrades Map с TTL** - предотвращает бесконечный рост памяти:
+   - Старая версия: `Set<string>` - рос бесконечно (тысячи entries за сутки)
+   - Новая версия: `Map<string, timestamp>` с TTL 24 часа
+   - Автоматическая очистка каждый час
+   - Cleanup interval корректно останавливается при SIGINT
+
+2. **DEBUG логи условные** - снижение CPU нагрузки:
+   - Старая версия: Логирование каждого WebSocket сообщения (10-100 msg/sec)
+   - Новая версия: DEBUG логи только при `DEBUG=1` в .env
+   - Экономия CPU от `toLocaleString()` вызовов на каждое сообщение
+
+**Рекомендации по мониторингу:**
+```bash
+# PM2 мониторинг памяти и CPU
+pm2 monit
+
+# Проверка размера processedTrades кэша
+# Будет логироваться при cleanup: "Removed N old trades from cache (size: X)"
+pm2 logs auto-sell-bot | grep CLEANUP
+```
 
 ---
 
@@ -1291,6 +1317,7 @@ WARN: the attribute `version` is obsolete
 
 ## История
 
+- **2025-12-26**: Auto-Sell Bot - Memory/CPU оптимизации. Исправлена критическая утечка памяти (processedTrades Map с TTL 24h), DEBUG логи условные (env DEBUG=1), cleanup interval при SIGINT
 - **2025-12-24**: Fix auto-sell-bot PM2 error - абсолютный путь ts-node interpreter в ecosystem.docker.config.js. Решена проблема "Cannot use import statement outside a module"
 - **2025-12-24**: Оптимизация network intervals - STREAM_INTERVAL_MS: 5ms→20ms, POLL_INTERVAL_MS: 250ms→350ms. Снижение spam: 1600→400 req/sec, исправлены EPIPE/EAI_AGAIN ошибки
 - **2025-12-24**: Fix updown-bot-49 ts-node error - абсолютный путь interpreter для Docker PM2

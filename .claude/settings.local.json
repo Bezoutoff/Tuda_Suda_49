@@ -27,7 +27,11 @@
       "WebFetch(domain:pastebin.com)",
       "WebFetch(domain:octopus.catnarok.net)",
       "Bash(tree:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(ls:*)",
+      "Bash(npm run auto-sell:*)",
+      "Bash(taskkill:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
