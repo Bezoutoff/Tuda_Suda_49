@@ -42,17 +42,21 @@ const SIMPLE_CONFIG = {
   START_POLLING_BEFORE_MS: 60000, // Начать polling за 60 сек до времени
 };
 
+// Cached timestamp (updates every second to reduce CPU load)
+let cachedTimestamp = new Date().toLocaleString('ru-RU');
+const timestampInterval = setInterval(() => {
+  cachedTimestamp = new Date().toLocaleString('ru-RU');
+}, 1000);
+
 // Logger with dynamic crypto prefix
 function log(message: string, crypto?: CryptoSymbol, ...args: any[]) {
-  const timestamp = new Date().toLocaleString('ru-RU');
   const prefix = crypto ? `[${crypto.toUpperCase()}-49]` : '[MULTI-49]';
-  console.log(`[${timestamp}] ${prefix} ${message}`, ...args);
+  console.log(`[${cachedTimestamp}] ${prefix} ${message}`, ...args);
 }
 
 function logError(message: string, crypto?: CryptoSymbol, ...args: any[]) {
-  const timestamp = new Date().toLocaleString('ru-RU');
   const prefix = crypto ? `[${crypto.toUpperCase()}-49]` : '[MULTI-49]';
-  console.error(`[${timestamp}] ${prefix} ERROR: ${message}`, ...args);
+  console.error(`[${cachedTimestamp}] ${prefix} ERROR: ${message}`, ...args);
 }
 
 /**
@@ -191,13 +195,15 @@ async function placeSimpleOrders(
   const startTime = Date.now();
   let totalAttempts = 0;
   const STREAM_INTERVAL_MS = 20;
-  const inFlightRequests: Promise<void>[] = [];
+  let pendingRequests = 0; // Track pending requests without storing promises
 
   log(`Stream spam: sending requests every ${STREAM_INTERVAL_MS}ms`, crypto);
 
   const sendRequest = (order: typeof signedOrders[0]) => {
     totalAttempts++;
-    const promise = tradingService.postSignedOrder(order.signedOrder, order.expirationTimestamp)
+    pendingRequests++; // Increment counter
+
+    tradingService.postSignedOrder(order.signedOrder, order.expirationTimestamp)
       .then(result => {
         if (!order.placed) {
           order.placed = true;
@@ -206,8 +212,10 @@ async function placeSimpleOrders(
           log(`${order.side} @ ${SIMPLE_CONFIG.PRICE} placed: ${result.orderId} (${placedCount}/2)`, crypto);
         }
       })
-      .catch(() => {});
-    inFlightRequests.push(promise);
+      .catch(() => {})
+      .finally(() => {
+        pendingRequests--; // Decrement counter when request completes
+      });
   };
 
   // Stream loop
@@ -227,9 +235,11 @@ async function placeSimpleOrders(
     }
   }
 
-  // Wait for all in-flight requests
-  log(`Waiting for ${inFlightRequests.length} in-flight requests...`, crypto);
-  await Promise.all(inFlightRequests);
+  // Wait for all pending requests to complete
+  log(`Waiting for ${pendingRequests} pending requests...`, crypto);
+  while (pendingRequests > 0) {
+    await new Promise(r => setTimeout(r, 100));
+  }
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);
   const placedCount = signedOrders.filter(o => o.placed).length;
@@ -416,15 +426,33 @@ async function main() {
   }
 }
 
-// Handle termination
+// Handle termination with graceful cleanup
 process.on('SIGINT', () => {
-  log('Shutting down...');
-  process.exit(0);
+  log('Shutting down (SIGINT)...');
+
+  // Stop timestamp interval
+  clearInterval(timestampInterval);
+
+  // Flush stdout/stderr (important for Docker/PM2 logs)
+  process.stdout.write('', () => {
+    process.stderr.write('', () => {
+      process.exit(0);
+    });
+  });
 });
 
 process.on('SIGTERM', () => {
-  log('Shutting down...');
-  process.exit(0);
+  log('Shutting down (SIGTERM)...');
+
+  // Stop timestamp interval
+  clearInterval(timestampInterval);
+
+  // Flush stdout/stderr (important for Docker/PM2 logs)
+  process.stdout.write('', () => {
+    process.stderr.write('', () => {
+      process.exit(0);
+    });
+  });
 });
 
 // Run
