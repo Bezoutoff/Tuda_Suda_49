@@ -3,7 +3,7 @@
  *
  * Простая стратегия для BTC, ETH, SOL, XRP updown маркетов
  * 2 ордера по 0.49 (UP и DOWN) по 5 shares для каждой валюты
- * Expiration: 20 минут после старта торгов
+ * Expiration: 20 минут до старта торгов
  *
  * Usage: npm run updown-bot-49 updown-15m-TIMESTAMP
  * Note: Timestamp argument is REQUIRED
@@ -34,7 +34,7 @@ const CRYPTO_CONFIG: Record<CryptoSymbol, { enabled: boolean }> = {
 const SIMPLE_CONFIG = {
   PRICE: 0.49,
   SIZE: 5,
-  EXPIRATION_MINUTES: 20, // 20 минут после старта
+  EXPIRATION_MINUTES: 20, // 20 минут до старта
   POLL_INTERVAL_MS: 350,
   DELAY_BEFORE_SPAM_MS: 22500, // 22.5 секунд после получения token IDs
   MAX_ORDER_ATTEMPTS: 2000,
@@ -125,15 +125,16 @@ async function placeSimpleOrders(
   log(`Placing 2 orders for ${slug}:`, crypto);
   log(`  Price: $${SIMPLE_CONFIG.PRICE}`, crypto);
   log(`  Size: ${SIMPLE_CONFIG.SIZE} shares each (UP and DOWN)`, crypto);
-  log(`  Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes after start`, crypto);
+  log(`  Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes before start`, crypto);
 
-  // Calculate expiration: AFTER market start (not before!)
-  // Polymarket adds +60s automatically, so subtract 60 from desired buffer
-  const desiredSecondsAfterStart = SIMPLE_CONFIG.EXPIRATION_MINUTES * 60; // e.g. 1200s (20 min)
-  const expirationBuffer = desiredSecondsAfterStart - 60; // Account for Polymarket +60s
-  const expirationTimestamp = marketTimestamp + expirationBuffer;
+  // Calculate expiration: BEFORE market start (not after!)
+  // Polymarket subtracts 60s from relative time: adjustedTime = relativeTime - 60
+  // To get -1200s (20 min before), we specify relativeTime = -1140, PM adjusts to -1200
+  const desiredSecondsBeforeStart = SIMPLE_CONFIG.EXPIRATION_MINUTES * 60; // e.g. 1200s (20 min)
+  const expirationBuffer = desiredSecondsBeforeStart - 60; // 1200 - 60 = 1140
+  const expirationTimestamp = marketTimestamp - expirationBuffer; // marketTimestamp - 1140
 
-  log(`  Expiration time: ${formatTimestamp(expirationTimestamp)} (${SIMPLE_CONFIG.EXPIRATION_MINUTES} min after start)`, crypto);
+  log(`  Expiration time: ${formatTimestamp(expirationTimestamp)} (${SIMPLE_CONFIG.EXPIRATION_MINUTES} min before start)`, crypto);
 
   interface SignedOrderInfo {
     signedOrder: any;
@@ -337,7 +338,7 @@ async function main() {
   log(`Supported cryptos: ${SUPPORTED_CRYPTOS.join(', ').toUpperCase()}`);
   log(`Strategy: 2 orders @ $${SIMPLE_CONFIG.PRICE} (UP and DOWN) per crypto`);
   log(`Size: ${SIMPLE_CONFIG.SIZE} shares each`);
-  log(`Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes after start`);
+  log(`Expiration: ${SIMPLE_CONFIG.EXPIRATION_MINUTES} minutes before start`);
   const totalCapitalPerCrypto = SIMPLE_CONFIG.SIZE * SIMPLE_CONFIG.PRICE * 2;
   const totalCapitalAll = totalCapitalPerCrypto * SUPPORTED_CRYPTOS.length;
   log(`Total capital: $${totalCapitalAll} per timestamp (${SUPPORTED_CRYPTOS.length} cryptos × $${totalCapitalPerCrypto})`);
