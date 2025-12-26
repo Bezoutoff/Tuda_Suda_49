@@ -54,6 +54,24 @@ function log(message: string, crypto?: CryptoSymbol, ...args: any[]) {
   console.log(`[${cachedTimestamp}] ${prefix} ${message}`, ...args);
 }
 
+// Memory monitoring
+function checkMemory() {
+  const memUsage = process.memoryUsage();
+  const rssInMB = Math.round(memUsage.rss / 1024 / 1024);
+
+  if (rssInMB > 450) {
+    log(`⚠️ High memory usage: ${rssInMB}MB. Restarting recommended.`);
+  }
+
+  return rssInMB;
+}
+
+// Check memory every 30 minutes
+const memoryCheckInterval = setInterval(() => {
+  const rssInMB = checkMemory();
+  log(`Memory: ${rssInMB}MB`);
+}, 30 * 60 * 1000);
+
 function logError(message: string, crypto?: CryptoSymbol, ...args: any[]) {
   const prefix = crypto ? `[${crypto.toUpperCase()}-49]` : '[MULTI-49]';
   console.error(`[${cachedTimestamp}] ${prefix} ERROR: ${message}`, ...args);
@@ -430,8 +448,9 @@ async function main() {
 process.on('SIGINT', () => {
   log('Shutting down (SIGINT)...');
 
-  // Stop timestamp interval
+  // Stop intervals
   clearInterval(timestampInterval);
+  clearInterval(memoryCheckInterval);
 
   // Flush stdout/stderr (important for Docker/PM2 logs)
   process.stdout.write('', () => {
@@ -444,8 +463,9 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
   log('Shutting down (SIGTERM)...');
 
-  // Stop timestamp interval
+  // Stop intervals
   clearInterval(timestampInterval);
+  clearInterval(memoryCheckInterval);
 
   // Flush stdout/stderr (important for Docker/PM2 logs)
   process.stdout.write('', () => {

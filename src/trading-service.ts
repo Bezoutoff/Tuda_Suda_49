@@ -66,7 +66,7 @@ export class TradingService {
         this.config.signatureType,
         this.funder,
         undefined,  // baseUrl (deprecated)
-        true        // useServerTime - use server time for POLY_TIMESTAMP
+        undefined   // useServerTime - use local time (PM allows ±60s skew)
       );
 
       this.isInitialized = true;

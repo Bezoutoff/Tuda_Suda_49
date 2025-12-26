@@ -206,6 +206,37 @@ npm run build
 
 ## Troubleshooting
 
+### updown-bot-49: 401 Unauthorized после 7+ часов работы
+
+**Проблема:** Бот работает нормально, но через ~7 часов начинаются ошибки 401 с `POLY_TIMESTAMP: "[object Object]"`.
+
+**Причина:** Bug в ClobClient при `useServerTime = true` - timestamp кэш ломается после длительной работы и timestamp превращается в объект вместо числа.
+
+**Решение (применено в версии 2025-12-27):**
+```typescript
+// src/trading-service.ts строка 69
+this.client = new ClobClient(
+  ...
+  undefined  // useServerTime - используем локальное время
+);
+```
+
+**Важно:** Убедитесь что на VPS синхронизировано время (NTP):
+```bash
+# Проверить статус
+timedatectl status
+
+# Если не синхронизировано - включить
+sudo timedatectl set-ntp true
+```
+
+Polymarket API допускает ±60 секунд расхождения, локальное время VPS достаточно точное.
+
+**Почему updown-btc/eth/sol/xrp не имеют этой проблемы:**
+Эти боты используют C++ binary (`updown-bot-cpp`) который обновляет server timestamp каждые 100 запросов напрямую, не через ClobClient кэш.
+
+---
+
 ### Auto-Sell Bot: "Cannot use import statement outside a module"
 
 **Проблема:** Бот работает вручную (`npx ts-node src/auto-sell-bot.ts`), но падает в PM2.
@@ -1317,6 +1348,7 @@ WARN: the attribute `version` is obsolete
 
 ## История
 
+- **2025-12-27**: Critical fix - updown-bot-49 401 Unauthorized после 7+ часов. useServerTime bug исправлен (ClobClient timestamp cache ломается), переключено на локальное время. Memory monitoring добавлен (checkMemory каждые 30 мин).
 - **2025-12-26**: Auto-Sell Bot - Memory/CPU оптимизации. Исправлена критическая утечка памяти (processedTrades Map с TTL 24h), DEBUG логи условные (env DEBUG=1), cleanup interval при SIGINT
 - **2025-12-24**: Fix auto-sell-bot PM2 error - абсолютный путь ts-node interpreter в ecosystem.docker.config.js. Решена проблема "Cannot use import statement outside a module"
 - **2025-12-24**: Оптимизация network intervals - STREAM_INTERVAL_MS: 5ms→20ms, POLL_INTERVAL_MS: 250ms→350ms. Снижение spam: 1600→400 req/sec, исправлены EPIPE/EAI_AGAIN ошибки
