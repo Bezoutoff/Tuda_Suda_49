@@ -661,6 +661,400 @@ tail -100 /app/logs/auto-sell-bot-combined.log
 
 ---
 
+## 📊 Алгоритм работы хеджа (Auto-Sell Bot)
+
+### Концепция hedge стратегии
+
+**Auto-sell-bot** реализует **противоположный хедж** - когда исполняется позиция от updown-bot-49, бот покупает противоположную сторону по высокой цене для хеджирования риска.
+
+**Пример:**
+- updown-bot-49 покупает **UP @ $0.49** (5 shares)
+- auto-sell-bot покупает **DOWN @ $0.99** (5 shares)
+- **Результат:** Позиция захеджирована - неважно куда пойдет цена
+
+**Математика:**
+```
+Затраты:  $0.49 + $0.99 = $1.48
+Доход:    $1.00 (выигрывает одна из сторон)
+Убыток:   -$0.48 (-32%)
+```
+
+**Зачем это нужно?**
+- ✅ Фиксация позиции (не держим до expiration)
+- ✅ Предсказуемый риск (-$0.48 максимум)
+- ✅ Автоматизация (не нужно вручную закрывать)
+
+### Пошаговый алгоритм
+
+#### Шаг 1: Подключение к User Channel
+
+```
+auto-sell-bot → Polymarket RTDS WebSocket
+              → Topic: 'clob_user'
+              → Type: '*' (все события)
+              → Auth: CLOB credentials
+```
+
+Бот подписывается на **все** события своего аккаунта:
+- Trade events (fills)
+- Order placements
+- Order cancellations
+- Balance updates
+
+#### Шаг 2: Получение trade event
+
+```json
+{
+  "topic": "clob_user",
+  "type": "trade",
+  "payload": {
+    "id": "trade-123...",
+    "side": "BUY",
+    "owner": "your-api-key",
+    "price": "0.49",
+    "size": "5",
+    "asset_id": "token-456...",
+    "outcome": "Up",
+    "maker_orders": [...]
+  }
+}
+```
+
+#### Шаг 3: Фильтрация (4 проверки)
+
+**Фильтр 1: Дедупликация**
+```typescript
+if (processedTrades.has(tradeId)) {
+  log('[SKIP] Trade already processed');
+  return;
+}
+```
+- Проверяет что trade не был обработан ранее
+- Использует Map<tradeId, timestamp> с TTL 24 часа
+
+**Фильтр 2: Только BUY trades**
+```typescript
+if (side !== 'BUY') {
+  return;  // Пропускаем SELL trades
+}
+```
+- Хеджим только открытие позиций (BUY)
+- SELL trades игнорируем
+
+**Фильтр 3: Только свои trades**
+```typescript
+const isTaker = owner === tradingConfig.apiKey;
+const isMaker = payload.maker_orders?.some(
+  order => order.owner === tradingConfig.apiKey
+);
+
+if (!isTaker && !isMaker) {
+  return;  // Не наш trade, пропускаем
+}
+```
+- Проверяет что trade принадлежит нашему API key
+- Работает для обоих ролей: TAKER и MAKER
+
+**Фильтр 4: Фильтр по цене (защита от бесконечного цикла!)** ⚠️ **КРИТИЧНО**
+```typescript
+// Extract price
+let price = 0;
+if (isTaker) {
+  price = parseFloat(payload.price || '0');
+} else {
+  const ourOrder = payload.maker_orders.find(...);
+  price = parseFloat(ourOrder?.price || '0');
+}
+
+// CRITICAL: Ignore own hedge orders @ 0.99
+if (price >= 0.90) {
+  log(`[SKIP] Ignoring own hedge order @ ${price}`);
+  return;
+}
+```
+
+**Почему нужен фильтр по цене?**
+- updown-bot-49 покупает @ **$0.49**
+- auto-sell-bot хеджит @ **$0.99**
+- Без фильтра auto-sell увидит СВОЮ покупку @ $0.99 как новую позицию!
+- Запустится бесконечный цикл хеджей
+
+**Порог 0.90:**
+- Позиции @ $0.49 < $0.90 → **хеджить**
+- Хеджи @ $0.99 >= $0.90 → **пропустить**
+
+#### Шаг 4: Извлечение данных
+
+**TAKER сценарий:**
+```typescript
+tokenId = payload.asset_id;
+size = payload.size;
+price = parseFloat(payload.price);
+outcome = payload.outcome;  // "Up" или "Down"
+```
+
+**MAKER сценарий:**
+```typescript
+const ourOrder = payload.maker_orders.find(
+  order => order.owner === tradingConfig.apiKey
+);
+tokenId = ourOrder.asset_id;
+size = ourOrder.matched_amount;
+price = parseFloat(ourOrder.price);
+outcome = ourOrder.outcome;
+```
+
+#### Шаг 5: Проверка маркета (один хедж на маркет)
+
+```typescript
+// Получить slug и opposite token из market-cache.json
+const { oppositeTokenId, slug } = getOppositeTokenId(tokenId);
+
+// Проверить что маркет еще не обработан
+if (processedMarkets.has(slug)) {
+  log(`[SKIP] Market ${slug} already processed`);
+  return;
+}
+
+// Отметить маркет как обработанный ПЕРЕД покупкой
+processedMarkets.add(slug);
+```
+
+**Зачем это нужно?**
+- updown-bot-49 размещает **2 ордера**: UP @ $0.49 И DOWN @ $0.49
+- Если оба исполнятся, получим 2 trade events
+- Хеджим только **ПЕРВЫЙ** который исполнится, второй пропускаем
+
+#### Шаг 6: Определение противоположного outcome
+
+```typescript
+let oppositeOutcome: string;
+if (outcome === 'Up' || outcome === 'YES') {
+  oppositeOutcome = outcome === 'Up' ? 'Down' : 'NO';
+} else {
+  oppositeOutcome = outcome === 'Down' ? 'Up' : 'YES';
+}
+```
+
+Примеры:
+- UP → DOWN
+- Down → Up
+- YES → NO
+- NO → YES
+
+#### Шаг 7: Размещение hedge ордера
+
+```typescript
+await tradingService.createLimitOrder({
+  tokenId: oppositeTokenId,  // ← ПРОТИВОПОЛОЖНЫЙ token!
+  side: 'BUY',               // ← BUY, не SELL!
+  price: 0.99,               // Хедж по $0.99
+  size: size,                // Тот же размер что и исполнилось
+  outcome: oppositeOutcome,  // Противоположный исход
+  // expirationTimestamp not needed (GTC order)
+});
+```
+
+**Важно:**
+- Покупаем ПРОТИВОПОЛОЖНУЮ сторону (opposite token)
+- Используем BUY, не SELL
+- Цена жестко задана: $0.99
+- Размер такой же как исполнившаяся позиция
+
+### Примеры работы (сценарии)
+
+#### Сценарий 1: Нормальная работа
+
+```
+1. updown-bot-49 размещает:
+   - UP @ $0.49 (5 shares)
+   - DOWN @ $0.49 (5 shares)
+
+2. UP исполняется первым (через 2 сек)
+   - Trade event: side=BUY, price=0.49, outcome=Up
+   - Фильтры:
+     ✓ Новый trade (не в processedTrades)
+     ✓ side === 'BUY'
+     ✓ Наш API key
+     ✓ price (0.49) < 0.90
+     ✓ Маркет не обработан (не в processedMarkets)
+   - Действие: Покупаем DOWN @ $0.99 (5 shares)
+   - processedMarkets.add(slug)
+
+3. DOWN исполняется вторым (через 5 сек)
+   - Trade event: side=BUY, price=0.49, outcome=Down
+   - Фильтры:
+     ✓ Новый trade
+     ✓ side === 'BUY'
+     ✓ Наш API key
+     ✓ price (0.49) < 0.90
+     ✗ Маркет УЖЕ обработан (в processedMarkets)
+   - Действие: SKIP (пропускаем)
+
+ИТОГО:
+- Куплена DOWN @ $0.99 (противоположная первой позиции UP)
+- Вторая позиция (DOWN @ $0.49) НЕ захеджирована
+```
+
+#### Сценарий 2: Предотвращение бесконечного цикла
+
+```
+1. updown-bot-49: UP @ $0.49 (5 shares) → исполнился
+   - auto-sell видит trade
+   - price = 0.49 < 0.90 ✓
+   - Покупаем hedge: DOWN @ $0.99
+
+2. auto-sell сам покупает: DOWN @ $0.99
+   - WebSocket возвращает trade event от СВОЕЙ покупки!
+   - Trade event: side=BUY, price=0.99, outcome=Down
+   - Фильтры:
+     ✓ Новый trade
+     ✓ side === 'BUY'
+     ✓ Наш API key
+     ✗ price (0.99) >= 0.90 ← ФИЛЬТР СРАБОТАЛ!
+   - Лог: "[SKIP] Ignoring own hedge order @ 0.99"
+   - Действие: SKIP
+
+3. Бесконечный цикл ПРЕДОТВРАЩЁН ✅
+```
+
+**Без фильтра по цене (старая версия - баг!):**
+```
+1. UP @ $0.49 → hedge DOWN @ $0.99
+2. DOWN @ $0.99 → hedge UP @ $0.99  ← БАГ!
+3. UP @ $0.99 → hedge DOWN @ $0.99  ← ЦИКЛ!
+4. DOWN @ $0.99 → hedge UP @ $0.99
+5. ... бесконечно покупаем @ $0.99
+```
+
+#### Сценарий 3: TAKER vs MAKER
+
+**TAKER (мы размещаем market order, кто-то мейкер):**
+```
+payload.price = "0.49"          ← цена здесь
+payload.size = "5"
+payload.asset_id = "token-123"
+payload.outcome = "Up"
+```
+
+**MAKER (мы размещаем limit order, кто-то берет его):**
+```
+payload.maker_orders = [
+  {
+    owner: "our-api-key",
+    price: "0.49",              ← цена в maker_orders
+    matched_amount: "5",
+    asset_id: "token-123",
+    outcome: "Up"
+  }
+]
+```
+
+Бот корректно обрабатывает оба сценария!
+
+### Технические детали
+
+#### Market Cache файл
+
+**Файл:** `logs/market-cache.json`
+
+**Содержимое:**
+```json
+{
+  "token-abc-up": {
+    "oppositeTokenId": "token-abc-down",
+    "slug": "btc-updown-15m-1766880000",
+    "outcome": "YES"
+  },
+  "token-abc-down": {
+    "oppositeTokenId": "token-abc-up",
+    "slug": "btc-updown-15m-1766880000",
+    "outcome": "NO"
+  }
+}
+```
+
+**Создается:** updown-bot-49 при размещении ордеров
+**Используется:** auto-sell-bot для получения opposite token ID
+
+#### Deduplication и Cleanup
+
+**processedTrades Map:**
+```typescript
+Map<tradeId, timestamp>
+TTL: 24 часа
+Cleanup: каждый час
+```
+
+**processedMarkets Set:**
+```typescript
+Set<slug>
+Cleanup: при размере > 100 (каждый час)
+```
+
+#### Задержка перед хеджем
+
+```typescript
+const DELAY_MS = 15000;  // 15 секунд
+await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+```
+
+**Зачем?**
+- Tokens нужно время для settlement на blockchain
+- Если продать сразу → может не хватить баланса
+- 15 секунд достаточно для подтверждения
+
+### Логи работы хеджа
+
+```
+[27.12.2025, 15:30:12] [AUTO-SELL] [TAKER] BUY position opened: 5 shares of token-123 @ 0.49 (outcome: Up)
+[27.12.2025, 15:30:12] [AUTO-SELL] [TRIGGER] Position @ 0.49 detected (< 0.9 threshold) - will hedge
+[27.12.2025, 15:30:12] [AUTO-SELL] [TRIGGER] Waiting 15s for blockchain confirmation...
+[27.12.2025, 15:30:27] [AUTO-SELL] [TRIGGER] Auto-selling 5 shares of token-123 (outcome: Up, trade: trade-456)
+[27.12.2025, 15:30:27] [AUTO-SELL] Getting opposite token ID for token-123...
+[27.12.2025, 15:30:27] [AUTO-SELL] Found opposite token: token-789 (slug: btc-updown-15m-1766880000)
+[27.12.2025, 15:30:27] [AUTO-SELL] Buying opposite side: Down @ $0.99 (5 shares) [market: btc-updown-15m-1766880000]
+[27.12.2025, 15:30:28] [AUTO-SELL] Hedge order placed: orderId=order-999, side=BUY Down, price=0.99, size=5
+
+[27.12.2025, 15:30:35] [AUTO-SELL] [TAKER] BUY position opened: 5 shares of token-789 @ 0.99 (outcome: Down)
+[27.12.2025, 15:30:35] [AUTO-SELL] [SKIP] Ignoring own hedge order @ 0.99 (threshold: 0.9)
+
+[27.12.2025, 15:30:42] [AUTO-SELL] [MAKER] BUY position filled: 5 shares of token-234 @ 0.49 (outcome: Down)
+[27.12.2025, 15:30:42] [AUTO-SELL] [SKIP] Market btc-updown-15m-1766880000 already processed (first position already bought)
+```
+
+**Что видим:**
+1. UP @ $0.49 исполнился → хеджим DOWN @ $0.99 ✅
+2. Свой hedge @ $0.99 → пропускаем ✅
+3. DOWN @ $0.49 исполнился (второй) → пропускаем (маркет обработан) ✅
+
+### Защита от ошибок
+
+**1. Missing price в payload**
+```typescript
+price = parseFloat(payload.price || '0');
+```
+- Fallback на 0
+- 0 < 0.90 → trade будет обработан (безопасно)
+
+**2. Missing tokenId в cache**
+```typescript
+if (!result) {
+  logError('Failed to get opposite token ID from cache');
+  return;  // Пропускаем trade
+}
+```
+
+**3. Race condition (2 позиции одновременно)**
+```typescript
+processedMarkets.add(slug);  // Синхронно!
+await tradingService.createLimitOrder(...);  // Async
+```
+- `processedMarkets.add()` выполняется **до** await
+- Первый вызов добавит slug, второй увидит что уже обработано
+
+---
+
 ## 🚀 Полный запуск связки (updown-bot-49 + auto-sell-bot)
 
 ### В Docker на VPS
@@ -1084,6 +1478,8 @@ updown-bot-49.ts
 
 ## История изменений
 
+- **2025-12-27**: Добавлен детальный алгоритм работы хеджа (auto-sell-bot) - пошаговая логика, фильтры, защита от бесконечного цикла
+- **2025-12-27**: fix(auto-sell-bot): фильтр по цене для предотвращения бесконечного цикла хеджирования (HEDGE_PRICE_THRESHOLD = 0.90)
 - **2025-12-26**: Обновлен README - PM2 на VPS первым вариантом, исправлен expiration (ДО старта)
 - **2025-12-24**: Создан updown-bot-49 - мультивалютный бот (BTC, ETH, SOL, XRP)
 - **2025-12-24**: Исправлена ошибка ts-node в Docker (абсолютный путь interpreter)
