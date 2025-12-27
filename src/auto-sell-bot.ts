@@ -15,6 +15,9 @@ import { tradingConfig, AUTO_SELL_CONFIG } from './config';
 // Debug mode (set DEBUG=1 in .env to enable verbose logging)
 const DEBUG_MODE = process.env.DEBUG === '1';
 
+// Price threshold to distinguish bot-49 positions (0.49) from auto-sell hedges (0.99)
+const HEDGE_PRICE_THRESHOLD = 0.90;
+
 // Market cache path
 const MARKET_CACHE_PATH = path.join(__dirname, '../logs/market-cache.json');
 
@@ -101,22 +104,24 @@ async function handleTradeEvent(payload: any) {
       return;
     }
 
-    // Extract token ID, size, and outcome based on role
+    // Extract token ID, size, outcome, and price based on role
     let tokenId: string;
     let size: string;
     let outcome: string = 'NO'; // Default fallback
+    let price: number = 0;
 
     if (isTaker) {
       // Taker scenario: payload has asset_id and size
       tokenId = payload.asset_id;
       size = payload.size;
+      price = parseFloat(payload.price || '0');
 
       // Try to extract outcome from payload
       if (payload.outcome) {
         outcome = payload.outcome;
       }
 
-      log(`[TAKER] BUY position opened: ${size} shares of ${tokenId} (outcome: ${outcome})`);
+      log(`[TAKER] BUY position opened: ${size} shares of ${tokenId} @ ${price} (outcome: ${outcome})`);
     } else {
       // Maker scenario: data in maker_orders array
       const ourOrder = payload.maker_orders.find((order: any) =>
@@ -124,19 +129,28 @@ async function handleTradeEvent(payload: any) {
       );
       tokenId = ourOrder?.asset_id;
       size = ourOrder?.matched_amount;
+      price = parseFloat(ourOrder?.price || '0');
 
       // Try to extract outcome from maker order
       if (ourOrder?.outcome) {
         outcome = ourOrder.outcome;
       }
 
-      log(`[MAKER] BUY position filled: ${size} shares of ${tokenId} (outcome: ${outcome})`);
+      log(`[MAKER] BUY position filled: ${size} shares of ${tokenId} @ ${price} (outcome: ${outcome})`);
     }
 
     if (!tokenId || !size) {
       logError(`Missing tokenId or size in trade ${tradeId}`);
       return;
     }
+
+    // CRITICAL: Ignore our own hedge orders @ 0.99 (prevent infinite loop)
+    if (price >= HEDGE_PRICE_THRESHOLD) {
+      log(`[SKIP] Ignoring own hedge order @ ${price} (threshold: ${HEDGE_PRICE_THRESHOLD})`);
+      return;
+    }
+
+    log(`[TRIGGER] Position @ ${price} detected (< ${HEDGE_PRICE_THRESHOLD} threshold) - will hedge`);
 
     // Mark as processed BEFORE selling (prevent double-sell on error)
     processedTrades.set(tradeId, Date.now());
