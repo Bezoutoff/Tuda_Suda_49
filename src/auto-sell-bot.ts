@@ -175,7 +175,7 @@ function getOppositeTokenId(currentTokenId: string): string | null {
 }
 
 /**
- * Sell opposite position via GTC limit order @ 0.99 (hedge strategy)
+ * Buy opposite position via GTC limit order @ 0.99 (hedge strategy)
  */
 async function sellPosition(tokenId: string, size: number, outcome: string) {
   try {
@@ -184,26 +184,31 @@ async function sellPosition(tokenId: string, size: number, outcome: string) {
     const oppositeTokenId = getOppositeTokenId(tokenId);
 
     if (!oppositeTokenId) {
-      logError('Failed to get opposite token ID from cache, skipping sell');
+      logError('Failed to get opposite token ID from cache, skipping buy');
       return;
     }
 
-    // Determine opposite outcome
-    const oppositeOutcome = (outcome === 'YES' || outcome === 'Up') ? 'NO' : 'YES';
+    // Determine opposite outcome (keep same format: Up/Down or YES/NO)
+    let oppositeOutcome: string;
+    if (outcome === 'Up' || outcome === 'YES') {
+      oppositeOutcome = outcome === 'Up' ? 'Down' : 'NO';
+    } else {
+      oppositeOutcome = outcome === 'Down' ? 'Up' : 'YES';
+    }
 
-    log(`Selling opposite side: ${oppositeOutcome} @ $0.99 (${size} shares)`);
+    log(`Buying opposite side: ${oppositeOutcome} @ $0.99 (${size} shares)`);
 
-    // 2. Place GTC limit order on OPPOSITE side
+    // 2. Place GTC limit BUY order on OPPOSITE side
     const result = await tradingService.createLimitOrder({
-      tokenId: oppositeTokenId,  // ← Sell OPPOSITE side!
-      side: 'SELL',
-      price: 0.99,      // Fixed price: 99 cents
-      size: size,       // Number of shares
+      tokenId: oppositeTokenId,  // ← Buy OPPOSITE side!
+      side: 'BUY',               // ← BUY, not SELL!
+      price: 0.99,               // Buy at 99 cents
+      size: size,                // Number of shares
       outcome: oppositeOutcome,
       // expirationTimestamp not needed for GTC
     });
 
-    log(`Hedge order placed: orderId=${result.orderId}, side=${oppositeOutcome}, price=0.99, size=${size}`);
+    log(`Hedge order placed: orderId=${result.orderId}, side=BUY ${oppositeOutcome}, price=0.99, size=${size}`);
 
   } catch (error: any) {
     logError(`Failed to place hedge order:`, error.message);
