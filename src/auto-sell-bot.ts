@@ -41,6 +41,9 @@ function logError(message: string, ...args: any[]) {
 const processedTrades = new Map<string, number>(); // tradeId -> timestamp
 const PROCESSED_TRADES_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Processed markets (один маркет = одна покупка)
+const processedMarkets = new Set<string>(); // slug маркета
+
 // Cleanup old trades periodically
 const cleanupInterval = setInterval(() => {
   const now = Date.now();
@@ -53,6 +56,12 @@ const cleanupInterval = setInterval(() => {
   }
   if (cleaned > 0) {
     log(`[CLEANUP] Removed ${cleaned} old trades from cache (size: ${processedTrades.size})`);
+  }
+
+  // Cleanup processedMarkets if too large
+  if (processedMarkets.size > 100) {
+    processedMarkets.clear();
+    log('[CLEANUP] Cleared processedMarkets cache');
   }
 }, 60 * 60 * 1000); // Cleanup every hour
 
@@ -147,9 +156,9 @@ async function handleTradeEvent(payload: any) {
 }
 
 /**
- * Get opposite token ID from market cache
+ * Get opposite token ID and slug from market cache
  */
-function getOppositeTokenId(currentTokenId: string): string | null {
+function getOppositeTokenId(currentTokenId: string): { oppositeTokenId: string; slug: string } | null {
   try {
     if (!fs.existsSync(MARKET_CACHE_PATH)) {
       logError('Market cache file not found');
@@ -166,7 +175,10 @@ function getOppositeTokenId(currentTokenId: string): string | null {
     }
 
     log(`Found opposite token: ${entry.oppositeTokenId} (slug: ${entry.slug})`);
-    return entry.oppositeTokenId;
+    return {
+      oppositeTokenId: entry.oppositeTokenId,
+      slug: entry.slug,
+    };
 
   } catch (error: any) {
     logError('Failed to read market cache:', error.message);
@@ -176,19 +188,31 @@ function getOppositeTokenId(currentTokenId: string): string | null {
 
 /**
  * Buy opposite position via GTC limit order @ 0.99 (hedge strategy)
+ * Only processes FIRST position per market
  */
 async function sellPosition(tokenId: string, size: number, outcome: string) {
   try {
-    // 1. Get opposite side token ID from cache
+    // 1. Get opposite side token ID and slug from cache
     log(`Getting opposite token ID for ${tokenId}...`);
-    const oppositeTokenId = getOppositeTokenId(tokenId);
+    const result = getOppositeTokenId(tokenId);
 
-    if (!oppositeTokenId) {
+    if (!result) {
       logError('Failed to get opposite token ID from cache, skipping buy');
       return;
     }
 
-    // Determine opposite outcome (keep same format: Up/Down or YES/NO)
+    const { oppositeTokenId, slug } = result;
+
+    // 2. Check if this market was already processed
+    if (processedMarkets.has(slug)) {
+      log(`[SKIP] Market ${slug} already processed (first position already bought)`);
+      return;
+    }
+
+    // 3. Mark market as processed BEFORE buying (prevent race condition)
+    processedMarkets.add(slug);
+
+    // 4. Determine opposite outcome (keep same format: Up/Down or YES/NO)
     let oppositeOutcome: string;
     if (outcome === 'Up' || outcome === 'YES') {
       oppositeOutcome = outcome === 'Up' ? 'Down' : 'NO';
@@ -196,10 +220,10 @@ async function sellPosition(tokenId: string, size: number, outcome: string) {
       oppositeOutcome = outcome === 'Down' ? 'Up' : 'YES';
     }
 
-    log(`Buying opposite side: ${oppositeOutcome} @ $0.99 (${size} shares)`);
+    log(`Buying opposite side: ${oppositeOutcome} @ $0.99 (${size} shares) [market: ${slug}]`);
 
-    // 2. Place GTC limit BUY order on OPPOSITE side
-    const result = await tradingService.createLimitOrder({
+    // 5. Place GTC limit BUY order on OPPOSITE side
+    const orderResult = await tradingService.createLimitOrder({
       tokenId: oppositeTokenId,  // ← Buy OPPOSITE side!
       side: 'BUY',               // ← BUY, not SELL!
       price: 0.99,               // Buy at 99 cents
@@ -208,7 +232,7 @@ async function sellPosition(tokenId: string, size: number, outcome: string) {
       // expirationTimestamp not needed for GTC
     });
 
-    log(`Hedge order placed: orderId=${result.orderId}, side=BUY ${oppositeOutcome}, price=0.99, size=${size}`);
+    log(`Hedge order placed: orderId=${orderResult.orderId}, side=BUY ${oppositeOutcome}, price=0.99, size=${size}`);
 
   } catch (error: any) {
     logError(`Failed to place hedge order:`, error.message);
