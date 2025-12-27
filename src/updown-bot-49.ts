@@ -12,6 +12,8 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { TradingService } from './trading-service';
 import { tradingConfig, validateTradingConfig } from './config';
 
@@ -133,6 +135,49 @@ async function fetchMarketBySlug(slug: string): Promise<{
   }
 }
 
+// Market cache for auto-sell-bot integration
+const MARKET_CACHE_PATH = path.join(__dirname, '../logs/market-cache.json');
+
+interface MarketCache {
+  [tokenId: string]: {
+    oppositeTokenId: string;
+    slug: string;
+    outcome: 'YES' | 'NO';
+  };
+}
+
+/**
+ * Save market token mapping to cache file for auto-sell-bot
+ */
+function saveMarketCache(yesTokenId: string, noTokenId: string, slug: string): void {
+  try {
+    // Load existing cache
+    let cache: MarketCache = {};
+    if (fs.existsSync(MARKET_CACHE_PATH)) {
+      const data = fs.readFileSync(MARKET_CACHE_PATH, 'utf-8');
+      cache = JSON.parse(data);
+    }
+
+    // Add both mappings
+    cache[yesTokenId] = {
+      oppositeTokenId: noTokenId,
+      slug,
+      outcome: 'YES',
+    };
+    cache[noTokenId] = {
+      oppositeTokenId: yesTokenId,
+      slug,
+      outcome: 'NO',
+    };
+
+    // Save to file
+    fs.writeFileSync(MARKET_CACHE_PATH, JSON.stringify(cache, null, 2));
+
+  } catch (error: any) {
+    console.error('[CACHE] Failed to save market cache:', error.message);
+  }
+}
+
 /**
  * Place 2 simple orders: UP @ 0.49 and DOWN @ 0.49
  */
@@ -144,6 +189,9 @@ async function placeSimpleOrders(
   slug: string,
   crypto: CryptoSymbol
 ): Promise<boolean> {
+  // Save market cache for auto-sell-bot
+  saveMarketCache(yesTokenId, noTokenId, slug);
+
   log(`Placing 2 orders for ${slug}:`, crypto);
   log(`  Price: $${SIMPLE_CONFIG.PRICE}`, crypto);
   log(`  Size: ${SIMPLE_CONFIG.SIZE} shares each (UP and DOWN)`, crypto);

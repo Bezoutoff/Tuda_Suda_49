@@ -6,12 +6,25 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { RealTimeDataClient } from '@polymarket/real-time-data-client';
 import { TradingService } from './trading-service';
 import { tradingConfig, AUTO_SELL_CONFIG } from './config';
 
 // Debug mode (set DEBUG=1 in .env to enable verbose logging)
 const DEBUG_MODE = process.env.DEBUG === '1';
+
+// Market cache path
+const MARKET_CACHE_PATH = path.join(__dirname, '../logs/market-cache.json');
+
+interface MarketCache {
+  [tokenId: string]: {
+    oppositeTokenId: string;
+    slug: string;
+    outcome: 'YES' | 'NO';
+  };
+}
 
 // Logging helpers
 function log(message: string, ...args: any[]) {
@@ -134,25 +147,66 @@ async function handleTradeEvent(payload: any) {
 }
 
 /**
- * Sell position via GTC limit order @ 0.99
+ * Get opposite token ID from market cache
+ */
+function getOppositeTokenId(currentTokenId: string): string | null {
+  try {
+    if (!fs.existsSync(MARKET_CACHE_PATH)) {
+      logError('Market cache file not found');
+      return null;
+    }
+
+    const data = fs.readFileSync(MARKET_CACHE_PATH, 'utf-8');
+    const cache: MarketCache = JSON.parse(data);
+
+    const entry = cache[currentTokenId];
+    if (!entry) {
+      logError(`Token ${currentTokenId} not found in cache`);
+      return null;
+    }
+
+    log(`Found opposite token: ${entry.oppositeTokenId} (slug: ${entry.slug})`);
+    return entry.oppositeTokenId;
+
+  } catch (error: any) {
+    logError('Failed to read market cache:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Sell opposite position via GTC limit order @ 0.99 (hedge strategy)
  */
 async function sellPosition(tokenId: string, size: number, outcome: string) {
   try {
-    log(`Placing GTC limit order: ${size} shares @ $0.99 (outcome: ${outcome})`);
+    // 1. Get opposite side token ID from cache
+    log(`Getting opposite token ID for ${tokenId}...`);
+    const oppositeTokenId = getOppositeTokenId(tokenId);
 
+    if (!oppositeTokenId) {
+      logError('Failed to get opposite token ID from cache, skipping sell');
+      return;
+    }
+
+    // Determine opposite outcome
+    const oppositeOutcome = (outcome === 'YES' || outcome === 'Up') ? 'NO' : 'YES';
+
+    log(`Selling opposite side: ${oppositeOutcome} @ $0.99 (${size} shares)`);
+
+    // 2. Place GTC limit order on OPPOSITE side
     const result = await tradingService.createLimitOrder({
-      tokenId,
+      tokenId: oppositeTokenId,  // ← Sell OPPOSITE side!
       side: 'SELL',
       price: 0.99,      // Fixed price: 99 cents
       size: size,       // Number of shares
-      outcome: outcome, // YES or NO
+      outcome: oppositeOutcome,
       // expirationTimestamp not needed for GTC
     });
 
-    log(`GTC order placed: orderId=${result.orderId}, tokenId=${tokenId}, price=0.99, size=${size}`);
+    log(`Hedge order placed: orderId=${result.orderId}, side=${oppositeOutcome}, price=0.99, size=${size}`);
 
   } catch (error: any) {
-    logError(`Failed to place GTC limit order:`, error.message);
+    logError(`Failed to place hedge order:`, error.message);
   }
 }
 
